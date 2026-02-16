@@ -23,18 +23,25 @@ const getColor = (ext) => EXT_COLORS[ext] || '#6b7280'
 export default function AttachmentIndex() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState('date')
   const [page, setPage] = useState(1)
 
   const load = async (p = 1) => {
     setLoading(true)
+    setError(null)
     try {
       const result = await api.getAttachments({ search: search || undefined, sort_by: sortBy, page: p, page_size: 50 })
       setData(result)
       setPage(p)
-    } catch (err) { console.error(err) }
-    finally { setLoading(false) }
+    } catch (err) {
+      console.error('Attachments error:', err)
+      setError(String(err.message || err))
+      setData(null)
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { load(1) }, [sortBy])
@@ -45,7 +52,7 @@ export default function AttachmentIndex() {
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
           <Paperclip className="w-5 h-5 text-blue-600" /> Attachments
-          {data && <span className="text-sm font-normal text-gray-400">({data.total.toLocaleString()})</span>}
+          {data && <span className="text-sm font-normal text-gray-400">({(data.total || 0).toLocaleString()})</span>}
         </h2>
         <div className="flex items-center gap-3">
           <div className="relative">
@@ -61,7 +68,10 @@ export default function AttachmentIndex() {
         </div>
       </div>
 
-      {/* Extension summary */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{error}</div>
+      )}
+
       {data?.top_extensions?.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {data.top_extensions.slice(0, 12).map(({ ext, count }) => {
@@ -78,12 +88,13 @@ export default function AttachmentIndex() {
         </div>
       )}
 
-      {/* Attachment list */}
       <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
         {loading ? (
           <div className="p-4 space-y-2">{Array.from({length:8},(_,i)=><div key={i} className="skeleton h-12 rounded-lg" />)}</div>
         ) : !data?.items?.length ? (
-          <div className="p-8 text-center text-gray-400">No attachments found</div>
+          <div className="p-8 text-center text-gray-400 text-sm">
+            {data?.total === 0 ? 'No attachments found in your archive.' : 'No attachments match your search.'}
+          </div>
         ) : data.items.map((a, i) => {
           const Icon = getIcon(a.extension)
           return (
@@ -106,7 +117,7 @@ export default function AttachmentIndex() {
         })}
       </div>
 
-      {data && data.total_pages > 1 && (
+      {data && (data.total_pages || 1) > 1 && (
         <div className="flex items-center justify-between text-sm text-gray-500">
           <span>Page {data.page} of {data.total_pages}</span>
           <div className="flex gap-2">

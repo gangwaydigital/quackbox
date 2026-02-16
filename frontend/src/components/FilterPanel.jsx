@@ -31,7 +31,6 @@ export default function FilterPanel({ onFilter, currentFilters }) {
 
   return (
     <div className="w-full md:w-56 flex-shrink-0">
-      {/* Mobile toggle */}
       <button onClick={() => setExpanded(!expanded)} className="md:hidden flex items-center justify-between w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 mb-2">
         <span className="flex items-center gap-1.5"><Filter className="w-4 h-4" />Filters {hasActive && <span className="w-2 h-2 bg-blue-500 rounded-full" />}</span>
         <ChevronDown className={`w-4 h-4 transition-transform ${expanded ? 'rotate-180' : ''}`} />
@@ -49,7 +48,11 @@ export default function FilterPanel({ onFilter, currentFilters }) {
             <select value={filters.sender_email} onChange={e => handleChange('sender_email', e.target.value)}
               className="w-full text-xs border border-gray-200 rounded px-2 py-1.5">
               <option value="">All senders</option>
-              {senders.map(s => <option key={s.email} value={s.email}>{s.name || s.email} ({s.count})</option>)}
+              {senders.map(s => (
+                <option key={s.sender_email} value={s.sender_email}>
+                  {s.sender_name || s.sender_email} ({s.email_count})
+                </option>
+              ))}
             </select>
           </div>
 
@@ -58,7 +61,11 @@ export default function FilterPanel({ onFilter, currentFilters }) {
             <select value={filters.mbox_source} onChange={e => handleChange('mbox_source', e.target.value)}
               className="w-full text-xs border border-gray-200 rounded px-2 py-1.5">
               <option value="">All mailboxes</option>
-              {sources.map(s => <option key={s.source} value={s.source}>{s.source} ({s.count})</option>)}
+              {sources.map(s => (
+                <option key={s.mbox_source} value={s.mbox_source}>
+                  {s.mbox_source} ({s.email_count})
+                </option>
+              ))}
             </select>
           </div>
 

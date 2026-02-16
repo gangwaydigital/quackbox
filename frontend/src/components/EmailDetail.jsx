@@ -7,6 +7,7 @@ export default function EmailDetail() {
   const { id } = useParams()
   const [email, setEmail] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [showHtml, setShowHtml] = useState(false)
   const [cleanQuotes, setCleanQuotes] = useState(false)
   const [cleanedBody, setCleanedBody] = useState(null)
@@ -16,13 +17,31 @@ export default function EmailDetail() {
   const [summarizing, setSummarizing] = useState(false)
 
   useEffect(() => {
-    setLoading(true); setSimilar(null); setSummary(null); setCleanedBody(null); setCleanQuotes(false)
-    api.getEmail(id).then(setEmail).catch(console.error).finally(() => setLoading(false))
+    setLoading(true); setError(null); setSimilar(null); setSummary(null); setCleanedBody(null); setCleanQuotes(false)
+    api.getEmail(id)
+      .then(data => {
+        // Ensure arrays are arrays
+        if (typeof data.recipients === 'string') {
+          try { data.recipients = JSON.parse(data.recipients) } catch { data.recipients = [] }
+        }
+        if (typeof data.attachment_names === 'string') {
+          try { data.attachment_names = JSON.parse(data.attachment_names) } catch { data.attachment_names = [] }
+        }
+        if (!Array.isArray(data.recipients)) data.recipients = []
+        if (!Array.isArray(data.attachment_names)) data.attachment_names = []
+        if (!Array.isArray(data.topics)) data.topics = []
+        setEmail(data)
+      })
+      .catch(err => {
+        console.error('EmailDetail load error:', err)
+        setError(String(err.message || err))
+      })
+      .finally(() => setLoading(false))
   }, [id])
 
   useEffect(() => {
     if (cleanQuotes && !cleanedBody) {
-      api.getEmail(id + '?clean=true').then(d => setCleanedBody(d.body_text)).catch(console.error)
+      api.getEmailClean(id).then(d => setCleanedBody(d.body_text)).catch(console.error)
     }
   }, [cleanQuotes, id])
 
@@ -48,16 +67,34 @@ export default function EmailDetail() {
         <div className="skeleton h-4 w-1/2" />
         <div className="skeleton h-4 w-1/3" />
       </div>
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <div className="skeleton h-4 w-full mb-2" />
-        <div className="skeleton h-4 w-5/6 mb-2" />
-        <div className="skeleton h-4 w-4/6" />
+    </div>
+  )
+
+  if (error) return (
+    <div className="max-w-4xl mx-auto space-y-4">
+      <Link to="/emails" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700">
+        <ArrowLeft className="w-4 h-4" /> Back to inbox
+      </Link>
+      <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
+        <p className="text-red-700">Failed to load email: {error}</p>
       </div>
     </div>
   )
-  if (!email) return <div className="text-center py-12 text-gray-500">Email not found.</div>
+
+  if (!email) return (
+    <div className="max-w-4xl mx-auto space-y-4">
+      <Link to="/emails" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700">
+        <ArrowLeft className="w-4 h-4" /> Back to inbox
+      </Link>
+      <div className="text-center py-12 text-gray-500">Email not found.</div>
+    </div>
+  )
 
   const bodyText = cleanQuotes && cleanedBody ? cleanedBody : email.body_text
+  const toRecipients = (email.recipients || []).filter(r => r && r.type === 'to')
+  const ccRecipients = (email.recipients || []).filter(r => r && r.type === 'cc')
+  const attachments = email.attachment_names || []
+  const topics = email.topics || []
 
   return (
     <div className="max-w-4xl mx-auto space-y-4">
@@ -89,7 +126,6 @@ export default function EmailDetail() {
         </div>
       </div>
 
-      {/* AI Summary */}
       {summary && !summary.error && (
         <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200 p-4 space-y-2">
           <div className="text-xs font-semibold text-amber-700 flex items-center gap-1"><FileText className="w-3.5 h-3.5" />AI Summary</div>
@@ -109,36 +145,35 @@ export default function EmailDetail() {
       )}
       {summary?.error && <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700">{summary.error}</div>}
 
-      {/* Email header */}
       <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 space-y-3">
         <h2 className="text-lg sm:text-xl font-semibold text-gray-900">{email.subject || '(no subject)'}</h2>
         <div className="space-y-1.5 text-sm">
           <div className="flex gap-2"><span className="text-gray-500 w-16 flex-shrink-0">From:</span>
             <span className="text-gray-900 truncate">{email.sender_name && <strong>{email.sender_name}</strong>}
             {email.sender_email && <span className="text-gray-500"> &lt;{email.sender_email}&gt;</span>}</span></div>
-          {email.recipients?.filter(r => r.type === 'to').length > 0 && (
+          {toRecipients.length > 0 && (
             <div className="flex gap-2"><span className="text-gray-500 w-16 flex-shrink-0">To:</span>
-              <span className="text-gray-700 truncate">{email.recipients.filter(r => r.type === 'to').map(r => r.name || r.email).join(', ')}</span></div>
+              <span className="text-gray-700 truncate">{toRecipients.map(r => r.name || r.email).join(', ')}</span></div>
           )}
-          {email.recipients?.filter(r => r.type === 'cc').length > 0 && (
+          {ccRecipients.length > 0 && (
             <div className="flex gap-2"><span className="text-gray-500 w-16 flex-shrink-0">Cc:</span>
-              <span className="text-gray-700 truncate">{email.recipients.filter(r => r.type === 'cc').map(r => r.name || r.email).join(', ')}</span></div>
+              <span className="text-gray-700 truncate">{ccRecipients.map(r => r.name || r.email).join(', ')}</span></div>
           )}
           <div className="flex gap-2"><span className="text-gray-500 w-16 flex-shrink-0">Date:</span>
             <span className="text-gray-700">{email.date_sent ? new Date(email.date_sent).toLocaleString() : 'Unknown'}</span></div>
           <div className="flex gap-2"><span className="text-gray-500 w-16 flex-shrink-0">Source:</span>
             <span className="text-gray-400 text-xs">{email.mbox_source}</span></div>
         </div>
-        {email.attachment_names?.length > 0 && (
+        {attachments.length > 0 && (
           <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
-            {email.attachment_names.map((name, i) => (
+            {attachments.map((name, i) => (
               <span key={i} className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 rounded text-xs text-gray-600"><Paperclip className="w-3 h-3" /> {name}</span>
             ))}
           </div>
         )}
-        {email.topics?.length > 0 && (
+        {topics.length > 0 && (
           <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
-            {email.topics.map(topic => (
+            {topics.map(topic => (
               <Link key={topic.id} to="/topics" className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs hover:bg-blue-100">
                 <Tag className="w-3 h-3" /> {topic.label}
               </Link>
@@ -147,7 +182,6 @@ export default function EmailDetail() {
         )}
       </div>
 
-      {/* Email body */}
       <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
         <div className="flex flex-wrap gap-2 mb-4">
           {email.body_html && <>
@@ -157,7 +191,7 @@ export default function EmailDetail() {
           {!showHtml && (
             <button onClick={() => setCleanQuotes(!cleanQuotes)}
               className={`text-xs px-3 py-1 rounded-full flex items-center gap-1 ${cleanQuotes ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600'}`}>
-              <AlignLeft className="w-3 h-3" />{cleanQuotes ? 'Showing clean' : 'Strip quotes'}
+              <Quote className="w-3 h-3" />{cleanQuotes ? 'Showing clean' : 'Strip quotes'}
             </button>
           )}
         </div>
@@ -168,7 +202,6 @@ export default function EmailDetail() {
         )}
       </div>
 
-      {/* Similar emails */}
       {similar && (
         <div className="bg-white rounded-lg border border-gray-200 p-5">
           <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
@@ -182,7 +215,7 @@ export default function EmailDetail() {
                   <div className="text-sm font-medium text-gray-800 truncate">{s.subject || '(no subject)'}</div>
                   <div className="text-xs text-gray-400">{s.sender_name || s.sender_email} · {s.date_sent ? new Date(s.date_sent).toLocaleDateString() : ''}</div>
                 </div>
-                <div className="ml-3 px-2 py-0.5 bg-purple-50 rounded text-xs text-purple-600">{Math.round(s.similarity * 100)}%</div>
+                <div className="ml-3 px-2 py-0.5 bg-purple-50 rounded text-xs text-purple-600">{Math.round((s.similarity || 0) * 100)}%</div>
               </div>
             </Link>
           ))}</div>}
