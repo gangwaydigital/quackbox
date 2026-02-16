@@ -1,6 +1,6 @@
 import { useState, useEffect, createContext, useContext } from 'react'
 import { Routes, Route, Link, useLocation } from 'react-router-dom'
-import { Mail, Tags, BarChart3, MessageCircle, MessageSquare, Users, Moon, Sun, Menu, X, Layers, Command, Calendar, Paperclip, Clock, Filter } from 'lucide-react'
+import { Mail, Tags, BarChart3, MessageCircle, MessageSquare, Users, Moon, Sun, Menu, X, Layers, Command, Calendar, Paperclip, Clock, Filter, ChevronLeft, Settings } from 'lucide-react'
 import { api } from './api/client'
 import { useKeyboardShortcuts, ShortcutsHelp } from './hooks/useKeyboardShortcuts.jsx'
 import SearchBar from './components/SearchBar'
@@ -37,8 +37,10 @@ export default function App() {
   const [stats, setStats] = useState(null)
   const [badges, setBadges] = useState(null)
   const [statsLoading, setStatsLoading] = useState(true)
-  const [mobileNav, setMobileNav] = useState(false)
   const [showShortcuts, setShowShortcuts] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    try { return localStorage.getItem('quackbox-sidebar') !== 'closed' } catch { return true }
+  })
   const location = useLocation()
 
   const loadStats = () => {
@@ -47,8 +49,11 @@ export default function App() {
     api.getBadges().then(setBadges).catch(() => {})
   }
   useEffect(() => { loadStats() }, [])
-  useEffect(() => { setMobileNav(false) }, [location])
   useKeyboardShortcuts(() => setShowShortcuts(true))
+
+  useEffect(() => {
+    localStorage.setItem('quackbox-sidebar', sidebarOpen ? 'open' : 'closed')
+  }, [sidebarOpen])
 
   const needsSetup = !statsLoading && stats && stats.total_emails === 0
 
@@ -66,71 +71,80 @@ export default function App() {
     { path: '/chat', icon: MessageCircle, label: 'Chat' },
   ]
 
+  if (needsSetup) {
+    return (
+      <ThemeProvider>
+        <div className="min-h-screen bg-gray-50">
+          <main className="max-w-4xl mx-auto px-4 py-6">
+            <SetupWizard onComplete={() => { loadStats(); window.location.reload() }} />
+          </main>
+        </div>
+      </ThemeProvider>
+    )
+  }
+
   return (
     <ThemeProvider>
-      <div className="min-h-screen bg-gray-50">
-        <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center justify-between h-14 sm:h-16">
-              <div className="flex items-center gap-4 sm:gap-5">
-                <h1 className="text-lg sm:text-xl font-semibold text-gray-900 flex items-center gap-2">
-                  <Mail className="w-5 h-5 text-blue-600" />
-                  <span className="hidden sm:inline">QuackBox</span>
-                  <span className="sm:hidden">QBX</span>
-                  {stats?.version && <span className="text-[10px] font-mono font-normal px-1.5 py-0.5 bg-gray-100 text-gray-400 rounded-full hidden sm:inline">v{stats.version}</span>}
-                </h1>
-                {!needsSetup && (
-                  <nav className="hidden xl:flex gap-0.5">
-                    {navItems.map(({ path, icon: Icon, label, badge }) => (
-                      <Link key={path} to={path} className={`relative flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium transition-colors ${location.pathname === path || (path !== '/' && location.pathname.startsWith(path)) ? 'bg-blue-50 text-blue-700' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'}`}>
-                        <Icon className="w-3.5 h-3.5" />{label}
-                        {badge && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-amber-400 rounded-full" />}
-                      </Link>
-                    ))}
-                  </nav>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                {stats && !needsSetup && (
-                  <div className="hidden xl:flex items-center gap-3 text-xs text-gray-500 mr-2">
-                    <span>{stats.total_emails?.toLocaleString()} emails</span>
-                  </div>
-                )}
-                {!needsSetup && (
-                  <button onClick={() => setShowShortcuts(true)} className="hidden sm:block p-2 rounded-lg hover:bg-gray-100" title="Keyboard shortcuts (?)">
-                    <Command className="w-4 h-4 text-gray-400" />
-                  </button>
-                )}
-                <ThemeToggle />
-                {!needsSetup && (
-                  <button onClick={() => setMobileNav(!mobileNav)} className="xl:hidden p-1.5 rounded-lg hover:bg-gray-100">
-                    {mobileNav ? <X className="w-5 h-5 text-gray-600" /> : <Menu className="w-5 h-5 text-gray-600" />}
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-          {mobileNav && !needsSetup && (
-            <div className="xl:hidden border-t border-gray-200 bg-white px-4 py-2">
-              {navItems.map(({ path, icon: Icon, label, badge }) => (
-                <Link key={path} to={path} className={`flex items-center gap-2 px-3 py-2.5 rounded-md text-sm font-medium ${location.pathname === path || (path !== '/' && location.pathname.startsWith(path)) ? 'bg-blue-50 text-blue-700' : 'text-gray-600'}`}>
-                  <Icon className="w-4 h-4" />{label}
-                  {badge && <span className="w-2 h-2 bg-amber-400 rounded-full" />}
+      <div className="min-h-screen bg-gray-50 flex">
+        {/* Sidebar */}
+        <aside className={`${sidebarOpen ? 'w-52' : 'w-14'} flex-shrink-0 bg-white border-r border-gray-200 sticky top-0 h-screen flex flex-col transition-all duration-200 z-30`}>
+          {/* Logo */}
+          <Link to="/" className={`flex items-center gap-2 px-3 h-14 border-b border-gray-100 hover:bg-gray-50 transition-colors ${sidebarOpen ? '' : 'justify-center'}`}>
+            <span className="text-xl">🦆</span>
+            {sidebarOpen && (
+              <span className="font-semibold text-gray-900 text-sm">
+                QuackBox
+                {stats?.version && <span className="text-[9px] font-mono font-normal text-gray-400 ml-1">v{stats.version}</span>}
+              </span>
+            )}
+          </Link>
+
+          {/* Nav items */}
+          <nav className="flex-1 overflow-y-auto py-2 px-1.5 space-y-0.5">
+            {navItems.map(({ path, icon: Icon, label, badge }) => {
+              const active = path === '/' ? location.pathname === '/' : location.pathname.startsWith(path)
+              return (
+                <Link key={path} to={path} title={sidebarOpen ? undefined : label}
+                  className={`relative flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm transition-colors ${active ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800'}`}>
+                  <Icon className="w-4 h-4 flex-shrink-0" />
+                  {sidebarOpen && <span className="truncate">{label}</span>}
+                  {badge && <span className={`w-2 h-2 bg-amber-400 rounded-full ${sidebarOpen ? 'ml-auto' : 'absolute top-1 right-1'}`} />}
                 </Link>
-              ))}
-            </div>
-          )}
-        </header>
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
-          {needsSetup ? (
-            <SetupWizard onComplete={() => { loadStats(); window.location.reload() }} />
-          ) : (
+              )
+            })}
+          </nav>
+
+          {/* Bottom actions */}
+          <div className="border-t border-gray-100 py-2 px-1.5 space-y-0.5">
+            {sidebarOpen && stats && (
+              <div className="px-2.5 py-1.5 text-[10px] text-gray-400">
+                {stats.total_emails?.toLocaleString()} emails
+              </div>
+            )}
+            <button onClick={() => setShowShortcuts(true)} title="Keyboard shortcuts (?)"
+              className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-700 w-full ${sidebarOpen ? '' : 'justify-center'}`}>
+              <Command className="w-4 h-4 flex-shrink-0" />
+              {sidebarOpen && <span>Shortcuts</span>}
+            </button>
+            <ThemeToggleSidebar open={sidebarOpen} />
+            <button onClick={() => setSidebarOpen(!sidebarOpen)}
+              className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-700 w-full ${sidebarOpen ? '' : 'justify-center'}`}>
+              <ChevronLeft className={`w-4 h-4 flex-shrink-0 transition-transform ${sidebarOpen ? '' : 'rotate-180'}`} />
+              {sidebarOpen && <span>Collapse</span>}
+            </button>
+          </div>
+        </aside>
+
+        {/* Main content */}
+        <main className="flex-1 min-w-0 overflow-auto">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/emails" element={<EmailsPage />} />
               <Route path="/email/:id" element={<EmailDetail />} />
               <Route path="/calendar" element={<CalendarView />} />
               <Route path="/timeline" element={<TimelineView />} />
+              <Route path="/search" element={<AdvancedSearch />} />
               <Route path="/threads" element={<ThreadList />} />
               <Route path="/thread/:id" element={<ThreadView />} />
               <Route path="/contacts" element={<ContactList />} />
@@ -138,23 +152,25 @@ export default function App() {
               <Route path="/mailboxes" element={<MailboxList />} />
               <Route path="/mailbox/:name" element={<MailboxDetail />} />
               <Route path="/attachments" element={<AttachmentIndex />} />
-              <Route path="/search" element={<AdvancedSearch />} />
-            <Route path="/topics" element={<TopicClusters />} />
+              <Route path="/topics" element={<TopicClusters />} />
               <Route path="/chat" element={<Chat />} />
             </Routes>
-          )}
+          </div>
         </main>
+
         {showShortcuts && <ShortcutsHelp onClose={() => setShowShortcuts(false)} />}
       </div>
     </ThemeProvider>
   )
 }
 
-function ThemeToggle() {
+function ThemeToggleSidebar({ open }) {
   const { dark, toggle } = useTheme()
   return (
-    <button onClick={toggle} className="p-2 rounded-lg hover:bg-gray-100 transition-colors" title={dark ? 'Light mode' : 'Dark mode'}>
-      {dark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-gray-500" />}
+    <button onClick={toggle} title={dark ? 'Light mode' : 'Dark mode'}
+      className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-700 w-full ${open ? '' : 'justify-center'}`}>
+      {dark ? <Sun className="w-4 h-4 flex-shrink-0 text-amber-400" /> : <Moon className="w-4 h-4 flex-shrink-0" />}
+      {open && <span>{dark ? 'Light mode' : 'Dark mode'}</span>}
     </button>
   )
 }

@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { Search, Calendar, User, Inbox, Paperclip, X } from 'lucide-react'
+import { Search, Calendar, User, Paperclip, X } from 'lucide-react'
 import { api } from '../api/client'
 
 export default function AdvancedSearch() {
@@ -13,35 +13,49 @@ export default function AdvancedSearch() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [page, setPage] = useState(1)
+  const timerRef = useRef(null)
 
-  const doSearch = async (p = 1) => {
+  const hasFilters = query.trim() || sender.trim() || dateFrom || dateTo || hasAttach
+
+  const doSearch = useCallback(async (p = 1) => {
+    const params = { page: p, page_size: 50 }
+    if (query.trim()) params.q = query.trim()
+    if (sender.trim()) params.sender = sender.trim()
+    if (dateFrom) params.date_from = dateFrom
+    if (dateTo) params.date_to = dateTo
+    if (hasAttach) params.has_attachments = true
+
+    // Don't search if nothing set
+    if (!params.q && !params.sender && !params.date_from && !params.date_to && !params.has_attachments) {
+      setResults(null)
+      return
+    }
+
     setLoading(true)
     setError(null)
     try {
-      const params = { page: p, page_size: 50 }
-      if (query.trim()) params.q = query.trim()
-      if (sender.trim()) params.sender = sender.trim()
-      if (dateFrom) params.date_from = dateFrom
-      if (dateTo) params.date_to = dateTo
-      if (hasAttach) params.has_attachments = true
-
       const data = await api.advancedSearch(params)
       setResults(data)
       setPage(p)
     } catch (err) {
-      console.error('Search failed:', err)
       setError(String(err.message || err))
     } finally {
       setLoading(false)
     }
-  }
+  }, [query, sender, dateFrom, dateTo, hasAttach])
+
+  // Realtime: debounce search on any filter change
+  useEffect(() => {
+    clearTimeout(timerRef.current)
+    if (!hasFilters) { setResults(null); return }
+    timerRef.current = setTimeout(() => doSearch(1), 350)
+    return () => clearTimeout(timerRef.current)
+  }, [query, sender, dateFrom, dateTo, hasAttach])
 
   const clear = () => {
     setQuery(''); setSender(''); setDateFrom(''); setDateTo('')
     setHasAttach(false); setResults(null); setError(null)
   }
-
-  const onKey = (e) => { if (e.key === 'Enter') doSearch(1) }
 
   return (
     <div className="space-y-4">
@@ -50,79 +64,59 @@ export default function AdvancedSearch() {
       </h2>
 
       <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
-        <div className="text-[10px] text-gray-400">Supports AND, OR, NOT operators in keywords</div>
+        <div className="text-[10px] text-gray-400">Results update as you type. Supports AND, OR, NOT in keywords.</div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           <div>
-            <label className="text-xs text-gray-500 mb-1 block flex items-center gap-1">
-              <Search className="w-3 h-3" /> Keywords
-            </label>
-            <input value={query} onChange={e => setQuery(e.target.value)} onKeyDown={onKey}
-              placeholder="e.g. budget AND review"
+            <label className="text-xs text-gray-500 mb-1 block flex items-center gap-1"><Search className="w-3 h-3" /> Keywords</label>
+            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="e.g. budget AND review"
               className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
-            <label className="text-xs text-gray-500 mb-1 block flex items-center gap-1">
-              <User className="w-3 h-3" /> Sender
-            </label>
-            <input value={sender} onChange={e => setSender(e.target.value)} onKeyDown={onKey}
-              placeholder="Name or email"
+            <label className="text-xs text-gray-500 mb-1 block flex items-center gap-1"><User className="w-3 h-3" /> Sender</label>
+            <input value={sender} onChange={e => setSender(e.target.value)} placeholder="Name or email"
               className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
-            <label className="text-xs text-gray-500 mb-1 block flex items-center gap-1">
-              <Calendar className="w-3 h-3" /> From
-            </label>
+            <label className="text-xs text-gray-500 mb-1 block flex items-center gap-1"><Calendar className="w-3 h-3" /> From</label>
             <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
               className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
-            <label className="text-xs text-gray-500 mb-1 block flex items-center gap-1">
-              <Calendar className="w-3 h-3" /> To
-            </label>
+            <label className="text-xs text-gray-500 mb-1 block flex items-center gap-1"><Calendar className="w-3 h-3" /> To</label>
             <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
               className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
-          <div className="flex items-end">
+          <div className="flex items-end gap-2">
             <label className="flex items-center gap-1.5 text-xs cursor-pointer px-3 py-2 border rounded-lg hover:bg-gray-50">
               <input type="checkbox" checked={hasAttach} onChange={e => setHasAttach(e.target.checked)} className="rounded" />
               <Paperclip className="w-3 h-3" /> Has attachments
             </label>
+            {hasFilters && (
+              <button onClick={clear} className="px-3 py-2 text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1 border rounded-lg hover:bg-gray-50">
+                <X className="w-3 h-3" /> Clear
+              </button>
+            )}
           </div>
-        </div>
-        <div className="flex items-center gap-2 pt-1">
-          <button onClick={() => doSearch(1)} disabled={loading}
-            className="px-5 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium">
-            {loading ? 'Searching...' : 'Search'}
-          </button>
-          {(query || sender || dateFrom || dateTo || hasAttach) && (
-            <button onClick={clear} className="px-3 py-2 text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1">
-              <X className="w-3.5 h-3.5" /> Clear
-            </button>
-          )}
         </div>
       </div>
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
-          Search error: {error}
-        </div>
-      )}
+      {error && <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{error}</div>}
 
-      {results && (
+      {loading && <div className="text-center py-4 text-sm text-gray-400">Searching...</div>}
+
+      {results && !loading && (
         <div className="bg-white rounded-xl border border-gray-200">
           <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100">
             <span className="text-xs text-gray-500">{(results.total || 0).toLocaleString()} results</span>
             <span className="text-xs text-gray-400">Page {results.page || 1} of {results.total_pages || 1}</span>
           </div>
-          {loading ? (
-            <div className="p-8 text-center text-gray-400 text-sm">Searching...</div>
-          ) : !results.items || results.items.length === 0 ? (
-            <div className="p-8 text-center text-gray-400 text-sm">No results found. Try different filters.</div>
+          {!results.items?.length ? (
+            <div className="p-8 text-center text-gray-400 text-sm">No results found.</div>
           ) : (
             <div className="divide-y divide-gray-100">
               {results.items.map(e => (
                 <Link key={e.id} to={'/email/' + e.id}
-                  className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors block">
+                  className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors">
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium text-gray-800 truncate">{e.subject || '(no subject)'}</div>
                     <div className="text-xs text-gray-400">
@@ -147,11 +141,11 @@ export default function AdvancedSearch() {
         </div>
       )}
 
-      {!results && !error && (
+      {!results && !error && !loading && (
         <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
           <Search className="w-10 h-10 text-gray-200 mx-auto mb-3" />
-          <p className="text-sm text-gray-400">Set your filters and click Search to find emails.</p>
-          <p className="text-xs text-gray-300 mt-1">Tip: Use AND, OR, NOT in keywords. Press Enter to search.</p>
+          <p className="text-sm text-gray-400">Start typing to search your archive.</p>
+          <p className="text-xs text-gray-300 mt-1">Results update in real-time as you type.</p>
         </div>
       )}
     </div>

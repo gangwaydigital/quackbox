@@ -3,10 +3,23 @@
 #
 # Usage:
 #   1. Place .mbox files in the data/ directory
-#   2. Make sure Ollama is running on the host: ollama serve
-#   3. Pull the embedding model: ollama pull nomic-embed-text
-#   4. Run: docker compose up --build
-#   5. Open http://localhost:5173
+#   2. Run: docker compose up --build
+#   3. Open http://localhost:5173
+#
+# AI Configuration (all optional — defaults to local Ollama):
+#
+#   Chat LLM (for Q&A and summarization):
+#     CHAT_API_URL    — API base URL (default: http://host.docker.internal:11434)
+#     CHAT_API_KEY    — API key (blank for Ollama)
+#     CHAT_MODEL      — Model name (default: llama3.1:8b)
+#     CHAT_API_TYPE   — "ollama" or "openai" (default: ollama)
+#
+#   Embedding LLM (for semantic search and topic clustering):
+#     EMBED_API_URL   — API base URL (default: http://host.docker.internal:11434)
+#     EMBED_API_KEY   — API key (blank for Ollama)
+#     EMBED_MODEL     — Model name (default: nomic-embed-text)
+#     EMBED_API_TYPE  — "ollama" or "openai" (default: ollama)
+#     EMBEDDING_DIMENSIONS — Vector size (default: 768)
 
 services:
   backend:
@@ -20,9 +33,19 @@ services:
       - ./data:/app/data
       - db-data:/app/db
     environment:
-      - OLLAMA_BASE_URL=http://host.docker.internal:11434
       - DATA_DIR=/app/data
       - DB_DIR=/app/db
+      # --- Chat LLM (defaults to local Ollama) ---
+      - CHAT_API_URL=http://host.docker.internal:11434
+      - CHAT_API_KEY=
+      - CHAT_MODEL=llama3.1:8b
+      - CHAT_API_TYPE=ollama
+      # --- Embedding LLM (defaults to local Ollama) ---
+      - EMBED_API_URL=http://host.docker.internal:11434
+      - EMBED_API_KEY=
+      - EMBED_MODEL=nomic-embed-text
+      - EMBED_API_TYPE=ollama
+      - EMBEDDING_DIMENSIONS=768
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:

@@ -61,6 +61,7 @@ export const api = {
   getSentiment: () => request('/contacts/sentiment'),
   getAttachments: (params = {}) => { const q = new URLSearchParams(); Object.entries(params).forEach(([k, v]) => { if (v != null && v !== '') q.set(k, v) }); return request(`/attachments?${q}`) },
   getAttachmentStats: () => request('/attachments/stats'),
+  getSettings: () => request('/settings'),
   // Bookmarks
   getBookmarks: (page = 1) => request(`/bookmarks?page=${page}`),
   addBookmark: (id, note) => request('/bookmarks', { method: 'POST', body: JSON.stringify({ email_id: id, note }) }),

@@ -16,47 +16,64 @@ from sklearn.metrics import silhouette_score
 from collections import Counter
 
 from app.config import (
-    OLLAMA_BASE_URL,
-    OLLAMA_EMBED_MODEL,
+    EMBED_API_URL,
+    EMBED_API_KEY,
+    EMBED_MODEL,
+    EMBED_API_TYPE,
     EMBEDDING_DIMENSIONS,
     DEFAULT_NUM_CLUSTERS,
     MIN_CLUSTER_SIZE,
+    OLLAMA_BASE_URL,
+    OLLAMA_EMBED_MODEL,
 )
 from app.database import get_db
 
 
 def check_ollama_available() -> bool:
-    """Check if Ollama is running and the embedding model is available."""
+    """Check if the embedding API is reachable."""
     try:
-        resp = requests.get(f"{OLLAMA_BASE_URL}/api/tags", timeout=5)
-        if resp.status_code == 200:
-            models = [m["name"] for m in resp.json().get("models", [])]
-            # Check both exact match and with :latest tag
-            return (
-                OLLAMA_EMBED_MODEL in models
-                or f"{OLLAMA_EMBED_MODEL}:latest" in models
-            )
-        return False
+        if EMBED_API_TYPE == "openai":
+            headers = {}
+            if EMBED_API_KEY:
+                headers["Authorization"] = f"Bearer {EMBED_API_KEY}"
+            resp = requests.get(f"{EMBED_API_URL}/v1/models", headers=headers, timeout=5)
+            return resp.status_code == 200
+        else:
+            resp = requests.get(f"{EMBED_API_URL}/api/tags", timeout=5)
+            if resp.status_code == 200:
+                models = [m["name"] for m in resp.json().get("models", [])]
+                return (EMBED_MODEL in models or f"{EMBED_MODEL}:latest" in models)
+            return False
     except Exception:
         return False
 
 
 def generate_embedding(text: str) -> Optional[list[float]]:
-    """
-    Generate an embedding vector for the given text using Ollama.
-
-    Returns:
-        List of floats (embedding vector) or None on failure
-    """
+    """Generate an embedding vector using configured API (Ollama or OpenAI-compatible)."""
     try:
-        resp = requests.post(
-            f"{OLLAMA_BASE_URL}/api/embed",
-            json={"model": OLLAMA_EMBED_MODEL, "input": text},
-            timeout=30,
-        )
+        if EMBED_API_TYPE == "openai":
+            headers = {"Content-Type": "application/json"}
+            if EMBED_API_KEY:
+                headers["Authorization"] = f"Bearer {EMBED_API_KEY}"
+            resp = requests.post(
+                f"{EMBED_API_URL}/v1/embeddings",
+                headers=headers,
+                json={"model": EMBED_MODEL, "input": text},
+                timeout=30,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get("data") and len(data["data"]) > 0:
+                    return data["data"][0]["embedding"]
+            return None
+        else:
+            resp = requests.post(
+                f"{EMBED_API_URL}/api/embed",
+                json={"model": EMBED_MODEL, "input": text},
+                timeout=30,
+            )
         if resp.status_code == 200:
             data = resp.json()
-            # Handle both single and batch response formats
             embeddings = data.get("embeddings", [])
             if embeddings:
                 return embeddings[0]
@@ -117,7 +134,7 @@ def generate_all_embeddings(batch_size: int = 50, regenerate: bool = False) -> d
                 embedding_bytes = np.array(embedding, dtype=np.float32).tobytes()
                 conn.execute(
                     "INSERT OR REPLACE INTO embeddings (email_id, embedding, model) VALUES (?, ?, ?)",
-                    (row["id"], embedding_bytes, OLLAMA_EMBED_MODEL),
+                    (row["id"], embedding_bytes, EMBED_MODEL),
                 )
                 generated += 1
             else:
