@@ -1,0 +1,58 @@
+# Mbox Explorer — Docker Compose
+#
+# Usage:
+#   1. Place .mbox files in the data/ directory
+#   2. Make sure Ollama is running on the host: ollama serve
+#   3. Pull the embedding model: ollama pull nomic-embed-text
+#   4. Run: docker compose up --build
+#   5. Open http://localhost:5173
+#
+# To ingest your mbox files:
+#   curl -X POST http://localhost:8000/api/ingest/all
+
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: mbox-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount source for hot-reload during development
+      - ./backend/app:/app/app
+      # Mount data directory for mbox files
+      - ./data:/app/data
+      # Persist the database between restarts
+      - db-data:/app/db
+    environment:
+      # Point to Ollama on the host machine
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      # Paths inside the container
+      - DATA_DIR=/app/data
+      - DB_DIR=/app/db
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: mbox-frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      # Mount source for hot-reload during development
+      - ./frontend/src:/app/src
+      - ./frontend/index.html:/app/index.html
+    environment:
+      - API_URL=http://mbox-backend:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  db-data:

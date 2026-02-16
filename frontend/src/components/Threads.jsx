@@ -1,0 +1,200 @@
+import { useState, useEffect } from 'react'
+import { Link, useParams, useNavigate } from 'react-router-dom'
+import { MessageSquare, Users, Clock, ArrowLeft, RefreshCw, ChevronDown, ChevronRight, Paperclip, Sparkles, CheckCircle, HelpCircle, AlertCircle } from 'lucide-react'
+import { api } from '../api/client'
+
+export function ThreadList() {
+  const [threads, setThreads] = useState([])
+  const [pagination, setPagination] = useState({ page:1, total:0, total_pages:1 })
+  const [sortBy, setSortBy] = useState('last_date')
+  const [minMessages, setMinMessages] = useState(2)
+  const [loading, setLoading] = useState(true)
+  const [rebuilding, setRebuilding] = useState(false)
+  const [rebuildStatus, setRebuildStatus] = useState(null)
+  const loadThreads = async (page=1) => {
+    setLoading(true)
+    try { const data = await api.getThreads({page,sort_by:sortBy,min_messages:minMessages,page_size:50}); setThreads(data.items); setPagination({page:data.page,total:data.total,total_pages:data.total_pages}) }
+    catch(err){console.error(err)} finally{setLoading(false)}
+  }
+  useEffect(()=>{loadThreads()},[sortBy,minMessages])
+  const handleRebuild = async () => {
+    setRebuilding(true); setRebuildStatus('Starting thread reconstruction...')
+    try {
+      await api.rebuildThreads()
+      const poll = setInterval(async()=>{
+        try{ const s=await api.getThreadStatus(); setRebuildStatus(s.progress||'Processing...')
+          if(!s.running){clearInterval(poll);setRebuilding(false);setRebuildStatus(s.result?`Done! ${s.result.multi_message_threads} conversations found`:s.error||'Complete');loadThreads()}
+        }catch{clearInterval(poll);setRebuilding(false)}
+      },2000)
+    }catch(err){setRebuilding(false);setRebuildStatus(`Error: ${err.message}`)}
+  }
+  const fmt=s=>{if(!s)return'—';const d=Math.floor(s/86400);if(d>365)return`${Math.round(d/365)}y`;if(d>30)return`${Math.round(d/30)}mo`;if(d>0)return`${d}d`;const h=Math.floor(s/3600);return h>0?`${h}h`:'<1h'}
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2"><MessageSquare className="w-5 h-5 text-blue-600"/>Threads{pagination.total>0&&<span className="text-sm font-normal text-gray-400">({pagination.total.toLocaleString()})</span>}</h2>
+        <div className="flex items-center gap-3">
+          <select value={minMessages} onChange={e=>setMinMessages(Number(e.target.value))} className="text-xs border border-gray-200 rounded-lg px-2 py-1.5"><option value={2}>2+ messages</option><option value={3}>3+</option><option value={5}>5+</option><option value={10}>10+</option></select>
+          <select value={sortBy} onChange={e=>setSortBy(e.target.value)} className="text-xs border border-gray-200 rounded-lg px-2 py-1.5"><option value="last_date">Most Recent</option><option value="message_count">Most Messages</option><option value="participant_count">Most People</option><option value="duration_seconds">Longest Running</option></select>
+          <button onClick={handleRebuild} disabled={rebuilding} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"><RefreshCw className={`w-3.5 h-3.5 ${rebuilding?'animate-spin':''}`}/>{rebuilding?'Rebuilding...':'Rebuild Threads'}</button>
+        </div>
+      </div>
+      {rebuildStatus&&<div className={`text-sm px-3 py-2 rounded-lg ${rebuilding?'bg-blue-50 text-blue-700':'bg-green-50 text-green-700'}`}>{rebuildStatus}</div>}
+      <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+        {loading?<div className="p-8 text-center text-gray-400">Loading threads...</div>
+        :threads.length===0?<div className="p-8 text-center text-gray-400">No threads found. Click "Rebuild Threads" to reconstruct conversations.</div>
+        :threads.map(t=>(
+          <Link key={t.id} to={`/thread/${t.id}`} className="flex items-center gap-4 px-4 py-3 hover:bg-gray-50 transition-colors">
+            <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0"><MessageSquare className="w-4 h-4 text-blue-600"/></div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-medium text-gray-800 truncate">{t.original_subject||t.subject_normalized||'(no subject)'}</div>
+              <div className="text-xs text-gray-400 flex items-center gap-3 mt-0.5">
+                <span className="flex items-center gap-1"><MessageSquare className="w-3 h-3"/>{t.message_count} msgs</span>
+                <span className="flex items-center gap-1"><Users className="w-3 h-3"/>{t.participant_count}</span>
+                <span className="flex items-center gap-1"><Clock className="w-3 h-3"/>{fmt(t.duration_seconds)}</span>
+              </div>
+            </div>
+            <div className="text-xs text-gray-400 text-right flex-shrink-0">
+              <div>{t.last_date?new Date(t.last_date).toLocaleDateString():'—'}</div>
+              <div className="text-gray-300">{t.first_date?new Date(t.first_date).toLocaleDateString():''}</div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-gray-300"/>
+          </Link>
+        ))}
+      </div>
+      {pagination.total_pages>1&&<div className="flex items-center justify-between text-sm text-gray-500"><span>Page {pagination.page} of {pagination.total_pages}</span><div className="flex gap-2"><button onClick={()=>loadThreads(pagination.page-1)} disabled={pagination.page<=1} className="px-3 py-1 rounded border border-gray-200 disabled:opacity-40 hover:bg-gray-50">Prev</button><button onClick={()=>loadThreads(pagination.page+1)} disabled={pagination.page>=pagination.total_pages} className="px-3 py-1 rounded border border-gray-200 disabled:opacity-40 hover:bg-gray-50">Next</button></div></div>}
+    </div>
+  )
+}
+
+export function ThreadView() {
+  const {id}=useParams(); const navigate=useNavigate()
+  const [thread, setThread]=useState(null); const [loading, setLoading]=useState(true)
+  const [expanded, setExpanded]=useState(new Set())
+  const [summary, setSummary]=useState(null); const [summarizing, setSummarizing]=useState(false)
+
+  useEffect(()=>{
+    setLoading(true);setSummary(null)
+    api.getThread(id).then(d=>{
+      setThread(d)
+      setExpanded(new Set(d.emails?.slice(-3).map(e=>e.id)||[]))
+      // Auto-summarize threads with 5+ messages
+      if(d.message_count>=5 && !summary){
+        setSummarizing(true)
+        api.summarizeThread(id).then(setSummary).catch(()=>{}).finally(()=>setSummarizing(false))
+      }
+    }).catch(console.error).finally(()=>setLoading(false))
+  },[id])
+  const toggle=eid=>{setExpanded(p=>{const n=new Set(p);if(n.has(eid))n.delete(eid);else n.add(eid);return n})}
+
+  const handleSummarize = async () => {
+    setSummarizing(true)
+    try {
+      const data = await api.summarizeThread(id)
+      setSummary(data)
+    } catch (err) {
+      setSummary({ error: err.message })
+    } finally { setSummarizing(false) }
+  }
+
+  if(loading)return<div className="p-8 text-center text-gray-400">Loading thread...</div>
+  if(!thread)return<div className="p-8 text-center text-gray-400">Thread not found</div>
+  const parts=new Map();thread.emails?.forEach(e=>{if(e.sender_email&&!parts.has(e.sender_email))parts.set(e.sender_email,e.sender_name||e.sender_email)})
+  const CL=['#3b82f6','#8b5cf6','#ec4899','#f59e0b','#10b981','#6366f1']
+
+  return (
+    <div className="max-w-4xl mx-auto space-y-4">
+      <div className="flex items-center justify-between">
+        <button onClick={()=>navigate(-1)} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"><ArrowLeft className="w-4 h-4"/>Back to threads</button>
+        <button onClick={handleSummarize} disabled={summarizing}
+          className="flex items-center gap-1.5 px-4 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 shadow-sm">
+          <Sparkles className="w-4 h-4"/>{summarizing ? 'Summarizing...' : 'Summarize Thread'}
+        </button>
+      </div>
+
+      {/* AI Summary Card */}
+      {summary && !summary.error && (
+        <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl border border-purple-200 p-5 space-y-4">
+          <div className="flex items-center gap-2 text-sm font-semibold text-purple-800">
+            <Sparkles className="w-4 h-4"/>AI Summary
+            {summary.sentiment && <span className="ml-auto px-2 py-0.5 bg-white/60 rounded-full text-xs font-medium text-purple-600">{summary.sentiment}</span>}
+          </div>
+          <p className="text-sm text-gray-800 leading-relaxed">{summary.summary}</p>
+
+          {summary.key_decisions?.length > 0 && (
+            <div>
+              <div className="text-xs font-semibold text-purple-700 mb-1.5 flex items-center gap-1"><CheckCircle className="w-3.5 h-3.5"/>Key Decisions</div>
+              <ul className="space-y-1">{summary.key_decisions.map((d,i)=><li key={i} className="text-sm text-gray-700 flex items-start gap-2"><span className="text-purple-400 mt-1">•</span>{d}</li>)}</ul>
+            </div>
+          )}
+
+          {summary.action_items?.length > 0 && (
+            <div>
+              <div className="text-xs font-semibold text-purple-700 mb-1.5 flex items-center gap-1"><AlertCircle className="w-3.5 h-3.5"/>Action Items</div>
+              <ul className="space-y-1.5">{summary.action_items.map((a,i)=>(
+                <li key={i} className="text-sm flex items-start gap-2">
+                  <span className={`mt-0.5 w-2 h-2 rounded-full flex-shrink-0 ${a.status==='done'?'bg-green-400':a.status==='open'?'bg-amber-400':'bg-gray-300'}`}/>
+                  <span className="text-gray-700">{typeof a === 'string' ? a : a.task}</span>
+                  {a.owner && <span className="text-xs text-purple-500 flex-shrink-0">→ {a.owner}</span>}
+                </li>))}</ul>
+            </div>
+          )}
+
+          {summary.open_questions?.length > 0 && (
+            <div>
+              <div className="text-xs font-semibold text-purple-700 mb-1.5 flex items-center gap-1"><HelpCircle className="w-3.5 h-3.5"/>Open Questions</div>
+              <ul className="space-y-1">{summary.open_questions.map((q,i)=><li key={i} className="text-sm text-gray-700 flex items-start gap-2"><span className="text-purple-400 mt-1">?</span>{q}</li>)}</ul>
+            </div>
+          )}
+
+          {summary.topic_tags?.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 pt-2 border-t border-purple-200/50">
+              {summary.topic_tags.map((t,i)=><span key={i} className="px-2 py-0.5 bg-white/60 rounded-full text-xs text-purple-600">{t}</span>)}
+            </div>
+          )}
+
+          <div className="text-[10px] text-purple-400 pt-1">Generated by {summary.model} • {summary.message_count} messages analyzed</div>
+        </div>
+      )}
+      {summary?.error && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">{summary.error}</div>
+      )}
+
+      <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <h2 className="text-lg font-semibold text-gray-900">{thread.emails?.[0]?.subject||thread.subject_normalized||'(no subject)'}</h2>
+        <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
+          <span className="flex items-center gap-1"><MessageSquare className="w-3.5 h-3.5"/>{thread.message_count} messages</span>
+          <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5"/>{thread.participant_count} participants</span>
+          <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5"/>{thread.first_date?new Date(thread.first_date).toLocaleDateString():'?'} — {thread.last_date?new Date(thread.last_date).toLocaleDateString():'?'}</span>
+        </div>
+        <div className="flex flex-wrap gap-1.5 mt-3">{Array.from(parts.entries()).map(([email,name])=><span key={email} className="px-2 py-0.5 bg-gray-100 rounded-full text-xs text-gray-600">{name}</span>)}</div>
+      </div>
+
+      <div className="space-y-2">{thread.emails?.map((email,i)=>{
+        const exp=expanded.has(email.id)
+        const init=(email.sender_name||email.sender_email||'?').charAt(0).toUpperCase()
+        const ci=Array.from(parts.keys()).indexOf(email.sender_email)%CL.length
+        return <div key={email.id} className="flex gap-3">
+          <div className="flex flex-col items-center">
+            <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium text-white flex-shrink-0" style={{backgroundColor:CL[ci>=0?ci:0]}}>{init}</div>
+            {i<thread.emails.length-1&&<div className="w-0.5 flex-1 bg-gray-200 mt-1"/>}
+          </div>
+          <div className="flex-1 bg-white rounded-xl border border-gray-200 mb-1 overflow-hidden">
+            <button onClick={()=>toggle(email.id)} className="w-full flex items-center gap-2 px-4 py-2.5 hover:bg-gray-50 text-left">
+              <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${exp?'':'-rotate-90'}`}/>
+              <span className="text-sm font-medium text-gray-800">{email.sender_name||email.sender_email}</span>
+              {email.has_attachments&&<Paperclip className="w-3 h-3 text-gray-400"/>}
+              <span className="flex-1"/>
+              <span className="text-xs text-gray-400">{email.date_sent?new Date(email.date_sent).toLocaleString():''}</span>
+              <Link to={`/email/${email.id}`} onClick={e=>e.stopPropagation()} className="text-xs text-blue-500 hover:text-blue-600 ml-2">Open</Link>
+            </button>
+            {exp&&<div className="px-4 pb-3 border-t border-gray-100">
+              {email.recipients?.length>0&&<div className="text-xs text-gray-400 mt-2 mb-2">To: {email.recipients.map(r=>r.name||r.email).join(', ')}</div>}
+              <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed mt-1">{email.body_text||'(no body)'}</div>
+              {email.attachment_names?.length>0&&<div className="flex flex-wrap gap-1.5 mt-3">{email.attachment_names.map((n,j)=><span key={j} className="flex items-center gap-1 px-2 py-0.5 bg-gray-100 rounded text-xs text-gray-500"><Paperclip className="w-3 h-3"/>{n}</span>)}</div>}
+            </div>}
+          </div>
+        </div>})}</div>
+    </div>
+  )
+}

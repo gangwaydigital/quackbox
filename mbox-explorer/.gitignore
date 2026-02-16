@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+*.egg-info/
+
+# Database
+*.db
+
+# Node
+node_modules/
+dist/
+
+# Data files (keep the directory, ignore contents)
+data/*.mbox
+data/*.mbox.gz
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

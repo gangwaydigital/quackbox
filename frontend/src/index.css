@@ -1,0 +1,122 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* ===== DARK MODE — CSS-level overrides ===== */
+/* This approach means we don't need dark: on every component */
+.dark { color-scheme: dark; }
+.dark body, .dark .min-h-screen { background-color: #0f1117 !important; }
+.dark .bg-white { background-color: #1a1b2e !important; }
+.dark .bg-gray-50 { background-color: #0f1117 !important; }
+.dark .bg-gray-100 { background-color: #252640 !important; }
+.dark .bg-gray-200 { background-color: #2d2f4a !important; }
+.dark .border-gray-200 { border-color: #2d2f4a !important; }
+.dark .border-gray-100 { border-color: #252640 !important; }
+.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: #252640 !important; }
+.dark .divide-gray-200 > :not([hidden]) ~ :not([hidden]) { border-color: #2d2f4a !important; }
+
+/* Text colors */
+.dark .text-gray-900 { color: #e2e4f0 !important; }
+.dark .text-gray-800 { color: #c8cbe0 !important; }
+.dark .text-gray-700 { color: #a8adc8 !important; }
+.dark .text-gray-600 { color: #8b90aa !important; }
+.dark .text-gray-500 { color: #6e7394 !important; }
+.dark .text-gray-400 { color: #565b7e !important; }
+.dark .text-gray-300 { color: #454968 !important; }
+
+/* Hover states */
+.dark .hover\:bg-gray-50:hover { background-color: #1e2038 !important; }
+.dark .hover\:bg-gray-100:hover { background-color: #252640 !important; }
+.dark .hover\:bg-gray-200:hover { background-color: #2d2f4a !important; }
+
+/* Inputs */
+.dark input, .dark select, .dark textarea {
+  background-color: #1a1b2e !important;
+  color: #c8cbe0 !important;
+  border-color: #2d2f4a !important;
+}
+.dark input::placeholder { color: #565b7e !important; }
+.dark input:focus { ring-color: #6366f1 !important; }
+
+/* Accent bg colors — keep light but adjust opacity */
+.dark .bg-blue-50 { background-color: rgba(59, 130, 246, 0.15) !important; }
+.dark .bg-purple-50 { background-color: rgba(139, 92, 246, 0.15) !important; }
+.dark .bg-green-50 { background-color: rgba(16, 185, 129, 0.15) !important; }
+.dark .bg-amber-50 { background-color: rgba(245, 158, 11, 0.15) !important; }
+.dark .bg-pink-50 { background-color: rgba(236, 72, 153, 0.15) !important; }
+.dark .bg-red-50 { background-color: rgba(239, 68, 68, 0.15) !important; }
+.dark .bg-indigo-50 { background-color: rgba(99, 102, 241, 0.15) !important; }
+
+/* Gradient overrides */
+.dark .from-purple-50 { --tw-gradient-from: rgba(139, 92, 246, 0.12) !important; }
+.dark .to-indigo-50 { --tw-gradient-to: rgba(99, 102, 241, 0.12) !important; }
+.dark .from-amber-50 { --tw-gradient-from: rgba(245, 158, 11, 0.12) !important; }
+.dark .to-orange-50 { --tw-gradient-to: rgba(249, 115, 22, 0.12) !important; }
+
+/* Border accent colors */
+.dark .border-purple-200 { border-color: rgba(139, 92, 246, 0.3) !important; }
+.dark .border-amber-200 { border-color: rgba(245, 158, 11, 0.3) !important; }
+.dark .border-red-200 { border-color: rgba(239, 68, 68, 0.3) !important; }
+.dark .border-blue-300 { border-color: rgba(59, 130, 246, 0.3) !important; }
+
+/* Specific component overrides */
+.dark .bg-gray-900 { background-color: #e2e4f0 !important; color: #1a1b2e !important; }
+.dark pre { color: #c8cbe0 !important; }
+.dark .prose { color: #a8adc8 !important; }
+.dark .prose strong { color: #e2e4f0 !important; }
+.dark .prose a { color: #818cf8 !important; }
+
+/* Recharts dark */
+.dark .recharts-cartesian-grid line { stroke: #2d2f4a !important; }
+.dark .recharts-text { fill: #6e7394 !important; }
+.dark .recharts-tooltip-wrapper .recharts-default-tooltip {
+  background-color: #1a1b2e !important;
+  border-color: #2d2f4a !important;
+  color: #c8cbe0 !important;
+}
+
+/* Canvas */
+.dark canvas.bg-gray-50 { background-color: #12131f !important; }
+
+/* Scrollbar */
+.dark ::-webkit-scrollbar { width: 8px; }
+.dark ::-webkit-scrollbar-track { background: #0f1117; }
+.dark ::-webkit-scrollbar-thumb { background: #2d2f4a; border-radius: 4px; }
+.dark ::-webkit-scrollbar-thumb:hover { background: #454968; }
+
+/* ===== SKELETON ANIMATION ===== */
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: 6px;
+}
+.dark .skeleton {
+  background: linear-gradient(90deg, #1e2038 25%, #252640 50%, #1e2038 75%) !important;
+  background-size: 800px 100%;
+}
+
+/* ===== SEARCH HIGHLIGHTING ===== */
+mark.search-highlight {
+  background-color: #fef08a;
+  color: inherit;
+  padding: 0 2px;
+  border-radius: 2px;
+}
+.dark mark.search-highlight {
+  background-color: rgba(250, 204, 21, 0.3) !important;
+  color: #e2e4f0 !important;
+}
+
+/* ===== MOBILE RESPONSIVE ===== */
+@media (max-width: 768px) {
+  .max-w-7xl { padding-left: 12px !important; padding-right: 12px !important; }
+}

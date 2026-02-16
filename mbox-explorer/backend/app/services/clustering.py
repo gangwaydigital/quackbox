@@ -1,0 +1,341 @@
+"""
+AI-powered topic clustering service.
+
+Uses Ollama to generate embeddings, then clusters them
+to discover email topics automatically.
+"""
+
+import json
+import time
+from typing import Optional
+
+import numpy as np
+import requests
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
+from collections import Counter
+
+from app.config import (
+    OLLAMA_BASE_URL,
+    OLLAMA_EMBED_MODEL,
+    EMBEDDING_DIMENSIONS,
+    DEFAULT_NUM_CLUSTERS,
+    MIN_CLUSTER_SIZE,
+)
+from app.database import get_db
+
+
+def check_ollama_available() -> bool:
+    """Check if Ollama is running and the embedding model is available."""
+    try:
+        resp = requests.get(f"{OLLAMA_BASE_URL}/api/tags", timeout=5)
+        if resp.status_code == 200:
+            models = [m["name"] for m in resp.json().get("models", [])]
+            # Check both exact match and with :latest tag
+            return (
+                OLLAMA_EMBED_MODEL in models
+                or f"{OLLAMA_EMBED_MODEL}:latest" in models
+            )
+        return False
+    except Exception:
+        return False
+
+
+def generate_embedding(text: str) -> Optional[list[float]]:
+    """
+    Generate an embedding vector for the given text using Ollama.
+
+    Returns:
+        List of floats (embedding vector) or None on failure
+    """
+    try:
+        resp = requests.post(
+            f"{OLLAMA_BASE_URL}/api/embed",
+            json={"model": OLLAMA_EMBED_MODEL, "input": text},
+            timeout=30,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            # Handle both single and batch response formats
+            embeddings = data.get("embeddings", [])
+            if embeddings:
+                return embeddings[0]
+            return data.get("embedding")
+        return None
+    except Exception as e:
+        print(f"  ⚠ Embedding error: {e}")
+        return None
+
+
+def generate_all_embeddings(batch_size: int = 50, regenerate: bool = False) -> dict:
+    """
+    Generate embeddings for all emails that don't have them yet.
+
+    Args:
+        batch_size: Number of emails to process between commits
+        regenerate: If True, regenerate all embeddings
+
+    Returns:
+        dict with processing statistics
+    """
+    start = time.time()
+    generated = 0
+    skipped = 0
+    errors = 0
+
+    with get_db() as conn:
+        if regenerate:
+            conn.execute("DELETE FROM embeddings")
+            condition = ""
+        else:
+            condition = "WHERE e.id NOT IN (SELECT email_id FROM embeddings)"
+
+        rows = conn.execute(f"""
+            SELECT e.id, e.subject, e.sender_name, e.body_text
+            FROM emails e
+            {condition}
+        """).fetchall()
+
+        total = len(rows)
+        print(f"🧠 Generating embeddings for {total} emails...")
+
+        for i, row in enumerate(rows):
+            # Create embedding input: combine subject + sender + body snippet
+            text = _make_embedding_text(
+                subject=row["subject"],
+                sender=row["sender_name"],
+                body=row["body_text"],
+            )
+
+            if not text.strip():
+                skipped += 1
+                continue
+
+            embedding = generate_embedding(text)
+            if embedding:
+                # Store as numpy bytes for compact storage
+                embedding_bytes = np.array(embedding, dtype=np.float32).tobytes()
+                conn.execute(
+                    "INSERT OR REPLACE INTO embeddings (email_id, embedding, model) VALUES (?, ?, ?)",
+                    (row["id"], embedding_bytes, OLLAMA_EMBED_MODEL),
+                )
+                generated += 1
+            else:
+                errors += 1
+
+            if (i + 1) % batch_size == 0:
+                conn.commit()
+                print(f"  ... {i + 1}/{total} ({generated} generated)")
+
+    duration = time.time() - start
+    result = {
+        "total": total,
+        "generated": generated,
+        "skipped": skipped,
+        "errors": errors,
+        "duration_seconds": round(duration, 2),
+    }
+    print(f"✅ Embeddings done: {generated} generated, {errors} errors ({duration:.1f}s)")
+    return result
+
+
+def cluster_topics(num_clusters: Optional[int] = None) -> dict:
+    """
+    Cluster emails into topics based on their embeddings.
+
+    Uses K-Means clustering. If num_clusters is None, automatically
+    determines the optimal number using silhouette scoring.
+
+    Returns:
+        dict with clustering results and topic info
+    """
+    start = time.time()
+
+    with get_db() as conn:
+        # Load all embeddings
+        rows = conn.execute("""
+            SELECT emb.email_id, emb.embedding, e.subject, e.body_text
+            FROM embeddings emb
+            JOIN emails e ON e.id = emb.email_id
+        """).fetchall()
+
+        if len(rows) < 10:
+            return {"error": "Need at least 10 emails with embeddings to cluster"}
+
+        email_ids = [row["email_id"] for row in rows]
+        subjects = [row["subject"] or "" for row in rows]
+        bodies = [row["body_text"] or "" for row in rows]
+
+        # Reconstruct numpy arrays from stored bytes
+        embeddings = np.array([
+            np.frombuffer(row["embedding"], dtype=np.float32)
+            for row in rows
+        ])
+
+        print(f"🔬 Clustering {len(embeddings)} emails...")
+
+        # Determine optimal cluster count if not specified
+        if num_clusters is None:
+            num_clusters = _find_optimal_clusters(embeddings)
+            print(f"  Auto-selected {num_clusters} clusters")
+
+        # Run K-Means
+        kmeans = KMeans(n_clusters=num_clusters, random_state=42, n_init=10)
+        labels = kmeans.fit_predict(embeddings)
+
+        # Clear old topics
+        conn.execute("DELETE FROM email_topics")
+        conn.execute("DELETE FROM topics")
+
+        # Create topics and assign emails
+        topics = []
+        for cluster_id in range(num_clusters):
+            mask = labels == cluster_id
+            cluster_email_ids = [eid for eid, m in zip(email_ids, mask) if m]
+            cluster_subjects = [s for s, m in zip(subjects, mask) if m]
+            cluster_bodies = [b for b, m in zip(bodies, mask) if m]
+
+            if len(cluster_email_ids) < 1:
+                continue
+
+            # Generate topic label from most common terms
+            keywords = _extract_keywords(cluster_subjects, cluster_bodies)
+            label = _make_topic_label(keywords)
+            description = f"Cluster of {len(cluster_email_ids)} emails about: {', '.join(keywords[:5])}"
+
+            # Insert topic
+            cursor = conn.execute(
+                "INSERT INTO topics (label, description, keywords, email_count) VALUES (?, ?, ?, ?)",
+                (label, description, json.dumps(keywords[:10]), len(cluster_email_ids)),
+            )
+            topic_id = cursor.lastrowid
+
+            # Assign emails to topic
+            # Calculate confidence as distance from cluster center
+            center = kmeans.cluster_centers_[cluster_id]
+            for eid, emb_row, is_member in zip(email_ids, embeddings, mask):
+                if is_member:
+                    distance = np.linalg.norm(emb_row - center)
+                    confidence = max(0.0, 1.0 - (distance / 10.0))  # Normalize
+                    conn.execute(
+                        "INSERT INTO email_topics (email_id, topic_id, confidence) VALUES (?, ?, ?)",
+                        (eid, topic_id, round(confidence, 4)),
+                    )
+
+            topics.append({
+                "id": topic_id,
+                "label": label,
+                "keywords": keywords[:10],
+                "email_count": len(cluster_email_ids),
+            })
+
+    duration = time.time() - start
+    return {
+        "num_clusters": len(topics),
+        "topics": topics,
+        "total_emails_clustered": len(email_ids),
+        "duration_seconds": round(duration, 2),
+    }
+
+
+def get_topics() -> list[dict]:
+    """Get all topics with their email counts."""
+    with get_db() as conn:
+        rows = conn.execute("""
+            SELECT id, label, description, keywords, email_count
+            FROM topics
+            ORDER BY email_count DESC
+        """).fetchall()
+
+        return [
+            {
+                "id": row["id"],
+                "label": row["label"],
+                "description": row["description"],
+                "keywords": json.loads(row["keywords"] or "[]"),
+                "email_count": row["email_count"],
+            }
+            for row in rows
+        ]
+
+
+# -- Internal helpers --
+
+def _make_embedding_text(subject: str, sender: str, body: str, max_body: int = 500) -> str:
+    """Combine email fields into text suitable for embedding."""
+    parts = []
+    if subject:
+        parts.append(f"Subject: {subject}")
+    if sender:
+        parts.append(f"From: {sender}")
+    if body:
+        # Use first N chars of body — enough for topic signal
+        parts.append(body[:max_body])
+    return "\n".join(parts)
+
+
+def _find_optimal_clusters(embeddings: np.ndarray, max_k: int = 30) -> int:
+    """
+    Use silhouette scoring to find optimal cluster count.
+
+    Tests k from 5 to max_k and picks the best silhouette score.
+    """
+    n_samples = len(embeddings)
+    max_k = min(max_k, n_samples // MIN_CLUSTER_SIZE)
+    max_k = max(max_k, 3)
+
+    best_score = -1
+    best_k = DEFAULT_NUM_CLUSTERS
+
+    for k in range(max(2, 5), max_k + 1, 2):  # Test odd numbers for speed
+        kmeans = KMeans(n_clusters=k, random_state=42, n_init=5, max_iter=100)
+        labels = kmeans.fit_predict(embeddings)
+        score = silhouette_score(embeddings, labels, sample_size=min(5000, n_samples))
+        if score > best_score:
+            best_score = score
+            best_k = k
+
+    return best_k
+
+
+def _extract_keywords(subjects: list[str], bodies: list[str], top_n: int = 10) -> list[str]:
+    """Extract most common meaningful words from a cluster's emails."""
+    # Simple term frequency approach
+    stop_words = {
+        "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
+        "have", "has", "had", "do", "does", "did", "will", "would", "could",
+        "should", "may", "might", "can", "shall", "to", "of", "in", "for",
+        "on", "with", "at", "by", "from", "as", "into", "through", "during",
+        "before", "after", "above", "below", "between", "out", "off", "over",
+        "under", "again", "further", "then", "once", "here", "there", "when",
+        "where", "why", "how", "all", "each", "every", "both", "few", "more",
+        "most", "other", "some", "such", "no", "nor", "not", "only", "own",
+        "same", "so", "than", "too", "very", "just", "don", "now", "re",
+        "this", "that", "these", "those", "i", "me", "my", "we", "our",
+        "you", "your", "he", "him", "his", "she", "her", "it", "its",
+        "they", "them", "their", "what", "which", "who", "whom",
+        "and", "but", "if", "or", "because", "about", "up",
+        "hi", "hello", "thanks", "thank", "please", "regards", "sent",
+        "am", "pm", "wrote", "subject", "from", "date",
+    }
+
+    word_counts = Counter()
+    for text in subjects + [b[:300] for b in bodies]:
+        if not text:
+            continue
+        words = text.lower().split()
+        for word in words:
+            cleaned = "".join(c for c in word if c.isalnum())
+            if cleaned and len(cleaned) > 2 and cleaned not in stop_words:
+                word_counts[cleaned] += 1
+
+    return [word for word, _ in word_counts.most_common(top_n)]
+
+
+def _make_topic_label(keywords: list[str]) -> str:
+    """Create a human-readable topic label from keywords."""
+    if not keywords:
+        return "Uncategorized"
+    # Use top 2-3 keywords as the label
+    label_words = keywords[:3]
+    return " / ".join(w.title() for w in label_words)

@@ -1,0 +1,36 @@
+"""QuackBox — FastAPI Application"""
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from app.database import init_db, get_stats
+from app.routers import emails, topics, ingest, chat, threads, analytics, contacts, export, attachments, bookmarks
+
+APP_VERSION = "3.1.0"
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+
+app = FastAPI(title="QuackBox", description="Your inbox, quacked open — email intelligence platform", version=APP_VERSION, lifespan=lifespan)
+app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173","http://localhost:3000","http://127.0.0.1:5173","http://127.0.0.1:3000"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+app.include_router(ingest.router)
+app.include_router(emails.router)
+app.include_router(topics.router)
+app.include_router(chat.router)
+app.include_router(threads.router)
+app.include_router(analytics.router)
+app.include_router(contacts.router)
+app.include_router(export.router)
+app.include_router(attachments.router)
+app.include_router(bookmarks.router)
+
+@app.get("/")
+async def root():
+    return {"app": "QuackBox", "version": APP_VERSION, "docs": "/docs"}
+
+@app.get("/api/stats")
+async def stats():
+    s = get_stats()
+    s["version"] = APP_VERSION
+    return s
