@@ -1,4 +1,4 @@
-# Backend dependencies for Mbox Explorer
+# Backend dependencies for QuackBox
 
 # Web framework
 fastapi>=0.110.0

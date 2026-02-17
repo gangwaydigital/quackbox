@@ -40,7 +40,7 @@ body {
   border-color: #2d2f4a !important;
 }
 .dark input::placeholder { color: #565b7e !important; }
-.dark input:focus { ring-color: #6366f1 !important; }
+.dark input:focus { outline-color: #6366f1 !important; --tw-ring-color: #6366f1 !important; }
 
 /* Accent bg colors — keep light but adjust opacity */
 .dark .bg-blue-50 { background-color: rgba(59, 130, 246, 0.15) !important; }
@@ -49,6 +49,7 @@ body {
 .dark .bg-amber-50 { background-color: rgba(245, 158, 11, 0.15) !important; }
 .dark .bg-pink-50 { background-color: rgba(236, 72, 153, 0.15) !important; }
 .dark .bg-red-50 { background-color: rgba(239, 68, 68, 0.15) !important; }
+.dark .bg-orange-50 { background-color: rgba(249, 115, 22, 0.15) !important; }
 .dark .bg-indigo-50 { background-color: rgba(99, 102, 241, 0.15) !important; }
 
 /* Gradient overrides */

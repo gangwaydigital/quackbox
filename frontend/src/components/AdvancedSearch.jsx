@@ -50,7 +50,7 @@ export default function AdvancedSearch() {
     if (!hasFilters) { setResults(null); return }
     timerRef.current = setTimeout(() => doSearch(1), 350)
     return () => clearTimeout(timerRef.current)
-  }, [query, sender, dateFrom, dateTo, hasAttach])
+  }, [query, sender, dateFrom, dateTo, hasAttach, doSearch])
 
   const clear = () => {
     setQuery(''); setSender(''); setDateFrom(''); setDateTo('')

@@ -12,6 +12,7 @@ export default function Chat() {
   const [showModelSelect, setShowModelSelect] = useState(false)
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
+  const modelDropdownRef = useRef(null)
 
   useEffect(() => {
     // Load available models
@@ -30,6 +31,17 @@ export default function Chat() {
       content: "Hi! I can help you explore your email archive. Ask me anything — who emailed you the most, what topics come up frequently, find specific conversations, or get summaries.\n\nTry something like:\n• \"Who are my top 5 email contacts?\"\n• \"Find emails about project deadlines from 2024\"\n• \"Summarize my conversations with [person]\"\n• \"What topics come up most in my inbox?\"",
       sources: [],
     }])
+  }, [])
+
+  // Close model dropdown on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (modelDropdownRef.current && !modelDropdownRef.current.contains(e.target)) {
+        setShowModelSelect(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
   }, [])
 
   useEffect(() => {
@@ -100,7 +112,7 @@ export default function Chat() {
         </h2>
 
         {/* Model selector */}
-        <div className="relative">
+        <div className="relative" ref={modelDropdownRef}>
           <button
             onClick={() => setShowModelSelect(!showModelSelect)}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"

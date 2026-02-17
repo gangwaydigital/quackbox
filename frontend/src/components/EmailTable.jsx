@@ -5,10 +5,13 @@ function highlightText(text, query) {
   if (!query || !text) return text
   const words = query.trim().split(/\s+/).filter(w => w.length > 2)
   if (words.length === 0) return text
-  const pattern = new RegExp(`(${words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'gi')
+  const escaped = words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')
+  const pattern = new RegExp(`(${escaped})`, 'gi')
   const parts = text.split(pattern)
+  // Use a fresh non-global regex for matching to avoid lastIndex statefulness
+  const matchTest = new RegExp(`^(?:${escaped})$`, 'i')
   return parts.map((part, i) =>
-    pattern.test(part) ? <mark key={i} className="search-highlight">{part}</mark> : part
+    matchTest.test(part) ? <mark key={i} className="search-highlight">{part}</mark> : part
   )
 }
 

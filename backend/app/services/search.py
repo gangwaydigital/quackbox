@@ -229,7 +229,7 @@ def get_mbox_sources() -> list[dict]:
 
 def _row_to_summary(row) -> dict:
     """Convert a database row to an email summary dict."""
-    return {
+    data = {
         "id": row["id"],
         "message_id": row["message_id"],
         "subject": row["subject"],
@@ -239,6 +239,12 @@ def _row_to_summary(row) -> dict:
         "has_attachments": bool(row["has_attachments"]),
         "snippet": make_snippet(row["body_text"] or ""),
     }
+    # Include thread_group_id if available (may not exist in all queries)
+    try:
+        data["thread_group_id"] = row["thread_group_id"]
+    except (IndexError, KeyError):
+        pass
+    return data
 
 
 def _sanitize_fts_query(query: str) -> str:
