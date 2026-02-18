@@ -4,14 +4,14 @@
 
 QuackBox is a self-hosted email intelligence platform that transforms `.mbox` and Apple Mail archives into a searchable, analyzable knowledge base. Explore decades of email with AI-powered search, conversation threading, contact profiling, and interactive visualizations — all running locally in Docker.
 
-![Version](https://img.shields.io/badge/version-3.4.0-blue) ![Stack](https://img.shields.io/badge/stack-Python%20%7C%20React%20%7C%20SQLite-green) ![License](https://img.shields.io/badge/license-MIT-gray)
+![Version](https://img.shields.io/badge/version-3.5.0-blue) ![Stack](https://img.shields.io/badge/stack-Python%20%7C%20React%20%7C%20SQLite-green) ![License](https://img.shields.io/badge/license-MIT-gray)
 
 ---
 
 ## Features
 
 ### Core
-- **Dashboard** — Volume trends, top contacts, activity heatmap, year-over-year breakdown, communication network treemap, thread insights
+- **Dashboard** — Gradient hero stat cards, volume chart with month-over-month trend indicators, insight strips (peak month, year totals), top contacts with relative volume bars and sparklines, activity heatmap with peak detection, year-by-year breakdown, thread insights, quick navigation actions
 - **Email Browser** — Full-text search (FTS5), filter by sender/date/mailbox/attachments, pagination, sort controls
 - **Advanced Search** — Boolean operators (AND / OR / NOT), "quoted phrases", prefix matching, date range pickers, FTS5-powered with BM25 relevance ranking and highlighted snippets
 - **Instant Search Preview** — Typeahead dropdown shows top results as you type with highlighted context, keyboard navigation (↑↓ Enter), and search history

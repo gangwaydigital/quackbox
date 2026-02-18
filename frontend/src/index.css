@@ -82,6 +82,7 @@ body {
 
 /* Canvas */
 .dark canvas.bg-gray-50 { background-color: #12131f !important; }
+.dark { --hg-zero: #1e2038; }
 
 /* Scrollbar */
 .dark ::-webkit-scrollbar { width: 8px; }
