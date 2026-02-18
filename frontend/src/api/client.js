@@ -81,4 +81,13 @@ export const api = {
   untagEmails: (tagId, ids) => request(`/bookmarks/tags/${tagId}/emails`, { method: 'DELETE', body: JSON.stringify({ email_ids: ids }) }),
   getTagEmails: (tagId, page = 1) => request(`/bookmarks/tags/${tagId}/emails?page=${page}`),
   getEmailTags: (id) => request(`/bookmarks/email/${id}/tags`),
+  // Deduplication
+  scanDuplicates: () => request('/duplicates/scan', { method: 'POST' }),
+  getDuplicates: (page = 1, pageSize = 20) => request(`/duplicates?page=${page}&page_size=${pageSize}`),
+  deleteDuplicates: (body) => request('/duplicates/delete', { method: 'POST', body: JSON.stringify(body) }),
+  dismissDuplicate: (groupId) => request(`/duplicates/${groupId}`, { method: 'DELETE' }),
+  // Attachment preview & content search
+  getAttachmentPreview: (emailId, filename) => request(`/attachments/${emailId}/${encodeURIComponent(filename)}/preview`),
+  searchAttachmentContent: (q, page = 1) => request(`/attachments/search/content?q=${encodeURIComponent(q)}&page=${page}`),
+  triggerAttachmentIndexing: () => request('/attachments/index', { method: 'POST' }),
 }

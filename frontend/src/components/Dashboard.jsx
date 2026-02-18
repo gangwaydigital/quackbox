@@ -4,6 +4,7 @@ import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, R
 import { BarChart3, Users, Calendar, MessageSquare, Clock, TrendingUp, TrendingDown, Mail, RefreshCw, Layers, Search, Paperclip, ArrowRight, Zap } from 'lucide-react'
 import { api } from '../api/client'
 import NetworkGraph from './NetworkGraph'
+import { OnboardingBanner } from './OnboardingTips'
 
 const COLORS = ['#3b82f6','#8b5cf6','#ec4899','#f59e0b','#10b981','#6366f1']
 const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
@@ -111,6 +112,11 @@ export default function Dashboard() {
           <RefreshCw className="w-3.5 h-3.5" />Refresh
         </button>
       </div>
+
+      <OnboardingBanner id="dashboard-intro">
+        Welcome to QuackBox! This dashboard shows live stats from your email archive.
+        Use the sidebar (or tap <strong>More</strong> on mobile) to explore threads, contacts, attachments, and AI-powered features.
+      </OnboardingBanner>
 
       {/* Hero Stat Cards */}
       {stats && (

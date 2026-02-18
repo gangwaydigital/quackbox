@@ -106,6 +106,66 @@ def init_db(db_path: Path = DB_PATH):
             )
         """)
 
+        # -- Attachment full-text content (PDF/DOCX extraction) --
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS attachment_content (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email_id INTEGER REFERENCES emails(id) ON DELETE CASCADE,
+                filename TEXT NOT NULL,
+                content_type TEXT,
+                extracted_text TEXT,
+                page_count INTEGER DEFAULT 0,
+                word_count INTEGER DEFAULT 0,
+                extraction_status TEXT DEFAULT 'pending',
+                extracted_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_attachment_email ON attachment_content(email_id)")
+        conn.execute("""
+            CREATE VIRTUAL TABLE IF NOT EXISTS attachment_fts USING fts5(
+                filename, extracted_text,
+                content='attachment_content', content_rowid='id',
+                tokenize='porter unicode61'
+            )
+        """)
+        conn.execute("""
+            CREATE TRIGGER IF NOT EXISTS attachment_content_ai AFTER INSERT ON attachment_content BEGIN
+                INSERT INTO attachment_fts(rowid, filename, extracted_text)
+                VALUES (new.id, new.filename, new.extracted_text); END
+        """)
+        conn.execute("""
+            CREATE TRIGGER IF NOT EXISTS attachment_content_ad AFTER DELETE ON attachment_content BEGIN
+                INSERT INTO attachment_fts(attachment_fts, rowid, filename, extracted_text)
+                VALUES ('delete', old.id, old.filename, old.extracted_text); END
+        """)
+        conn.execute("""
+            CREATE TRIGGER IF NOT EXISTS attachment_content_au AFTER UPDATE ON attachment_content BEGIN
+                INSERT INTO attachment_fts(attachment_fts, rowid, filename, extracted_text)
+                VALUES ('delete', old.id, old.filename, old.extracted_text);
+                INSERT INTO attachment_fts(rowid, filename, extracted_text)
+                VALUES (new.id, new.filename, new.extracted_text); END
+        """)
+
+        # -- Duplicate tracking --
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS duplicate_groups (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                canonical_email_id INTEGER REFERENCES emails(id) ON DELETE CASCADE,
+                duplicate_count INTEGER DEFAULT 0,
+                detection_method TEXT,
+                created_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS duplicate_emails (
+                group_id INTEGER REFERENCES duplicate_groups(id) ON DELETE CASCADE,
+                email_id INTEGER REFERENCES emails(id) ON DELETE CASCADE,
+                similarity_score REAL DEFAULT 1.0,
+                PRIMARY KEY (group_id, email_id)
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_dup_email ON duplicate_emails(email_id)")
+
     print(f"✅ Database initialized at {db_path}")
 
 def get_stats(db_path: Path = DB_PATH):

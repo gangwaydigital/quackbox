@@ -104,3 +104,49 @@ async def attachment_stats():
             "total_files": total_files,
             "top_extensions": sorted(ext_counts.items(), key=lambda x: -x[1])[:20],
         }
+
+
+# ── Attachment text preview & full-text search ───────────────────────────
+
+@router.get("/{email_id}/{filename}/preview")
+async def preview_attachment(email_id: int, filename: str):
+    """
+    Return extracted text content for a PDF or DOCX attachment.
+
+    Triggers extraction on first call if not yet indexed.
+    """
+    from app.services.attachment_indexer import get_attachment_preview, index_attachment
+
+    preview = get_attachment_preview(email_id, filename)
+    if preview is None:
+        # Index on demand
+        result = index_attachment(email_id, filename)
+        preview = get_attachment_preview(email_id, filename)
+        if preview is None:
+            from fastapi import HTTPException
+            raise HTTPException(404, f"Could not extract text from {filename}")
+
+    return preview
+
+
+@router.get("/search/content")
+async def search_attachment_content(
+    q: str = Query(..., min_length=2),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+):
+    """Full-text search across indexed PDF/DOCX attachment content."""
+    from app.services.attachment_indexer import search_attachment_content as sac
+    return sac(query=q, page=page, page_size=page_size)
+
+
+@router.post("/index")
+async def trigger_indexing():
+    """Trigger background indexing of all PDF/DOCX attachments."""
+    import asyncio
+    from concurrent.futures import ThreadPoolExecutor
+    from app.services.attachment_indexer import index_all_attachments
+    executor = ThreadPoolExecutor(max_workers=1)
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(executor, index_all_attachments)
+    return {"message": "Attachment indexing started in background"}

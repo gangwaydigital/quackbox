@@ -145,6 +145,13 @@ def _run_ingest():
                 warm_cache()
             except Exception as e:
                 print(f"⚠️  Cache warming failed (non-fatal): {e}")
+
+            # Index PDF/DOCX attachments in background
+            try:
+                from app.services.attachment_indexer import index_all_attachments
+                index_all_attachments()
+            except Exception as e:
+                print(f"⚠️  Attachment indexing failed (non-fatal): {e}")
     except Exception as e:
         _ingest_status.update({
             "running": False, "phase": "error",

@@ -16,3 +16,7 @@ scikit-learn>=1.4.0
 
 # Utilities
 python-multipart>=0.0.9   # File uploads
+
+# Attachment text extraction
+pypdf>=4.0.0              # PDF text extraction
+python-docx>=1.1.0        # DOCX text extraction
