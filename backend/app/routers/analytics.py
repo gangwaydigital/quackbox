@@ -6,43 +6,47 @@ from app.services.analytics import (
     email_volume_by_month, top_contacts, activity_heatmap,
     yearly_summary, mailbox_breakdown, thread_stats,
     response_time_stats, compute_all_analytics, get_cached,
-    communication_network
+    communication_network, dashboard_batch, warm_cache,
+    invalidate_cache, _cached_or_compute
 )
-from app.database import get_db
+from app.database import get_db, get_stats
 from app.services.timeline import get_timeline_milestones, get_notification_counts
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 _executor = ThreadPoolExecutor(max_workers=1)
 
+
+@router.get("/dashboard")
+async def dashboard():
+    """
+    Single endpoint that returns all dashboard data.
+    Uses cache where fresh, computes and caches the rest.
+    Replaces 6 separate API calls with 1.
+    """
+    data = dashboard_batch()
+    data["stats"] = get_stats()
+    data["badges"] = get_notification_counts()
+    return data
+
 @router.get("/volume")
 async def volume():
-    cached = get_cached("volume_by_month")
-    if cached: return cached
-    return {"data": email_volume_by_month(), "computed_at": "live"}
+    return _cached_or_compute("volume_by_month", email_volume_by_month)
 
 @router.get("/contacts")
 async def contacts(limit: int = 20):
-    cached = get_cached("top_contacts")
-    if cached: return cached
-    return {"data": top_contacts(limit), "computed_at": "live"}
+    return _cached_or_compute("top_contacts", lambda: top_contacts(limit))
 
 @router.get("/heatmap")
 async def heatmap():
-    cached = get_cached("activity_heatmap")
-    if cached: return cached
-    return {"data": activity_heatmap(), "computed_at": "live"}
+    return _cached_or_compute("activity_heatmap", activity_heatmap)
 
 @router.get("/yearly")
 async def yearly():
-    cached = get_cached("yearly_summary")
-    if cached: return cached
-    return {"data": yearly_summary(), "computed_at": "live"}
+    return _cached_or_compute("yearly_summary", yearly_summary)
 
 @router.get("/mailboxes")
 async def mailboxes():
-    cached = get_cached("mailbox_breakdown")
-    if cached: return cached
-    return {"data": mailbox_breakdown(), "computed_at": "live"}
+    return _cached_or_compute("mailbox_breakdown", mailbox_breakdown)
 
 @router.get("/mailbox/{mailbox_name:path}")
 async def mailbox_detail(mailbox_name: str):
@@ -83,9 +87,7 @@ async def mailbox_detail(mailbox_name: str):
 
 @router.get("/threads")
 async def threads():
-    cached = get_cached("thread_stats")
-    if cached: return cached
-    return {"data": thread_stats(), "computed_at": "live"}
+    return _cached_or_compute("thread_stats", thread_stats)
 
 @router.get("/response-times")
 async def response_times():
@@ -99,14 +101,19 @@ async def network(min_shared: int = Query(1, ge=1), limit: int = Query(80, ge=10
 async def calendar_data(year: int = Query(...), month: int = Query(...)):
     """Get email counts per day for a given month."""
     with get_db() as conn:
+        # Use range comparison instead of strftime() to leverage date index
+        start = f"{year:04d}-{month:02d}-01"
+        if month == 12:
+            end = f"{year + 1:04d}-01-01"
+        else:
+            end = f"{year:04d}-{month + 1:02d}-01"
         rows = conn.execute("""
             SELECT strftime('%Y-%m-%d', date_sent) as day, COUNT(*) as count,
                    COUNT(DISTINCT sender_email) as senders
             FROM emails
-            WHERE strftime('%Y', date_sent) = ? AND strftime('%m', date_sent) = ?
-              AND date_sent IS NOT NULL
+            WHERE date_sent >= ? AND date_sent < ? AND date_sent IS NOT NULL
             GROUP BY day ORDER BY day ASC
-        """, (str(year), f"{month:02d}")).fetchall()
+        """, (start, end)).fetchall()
         return {"year": year, "month": month, "days": [dict(r) for r in rows]}
 
 @router.get("/calendar/day")
@@ -117,9 +124,9 @@ async def calendar_day_detail(date: str = Query(...)):
             SELECT id, subject, sender_name, sender_email, date_sent,
                    mbox_source, has_attachments, thread_group_id
             FROM emails
-            WHERE strftime('%Y-%m-%d', date_sent) = ?
+            WHERE date_sent >= ? AND date_sent < date(?, '+1 day')
             ORDER BY date_timestamp ASC
-        """, (date,)).fetchall()
+        """, (date, date)).fetchall()
         return {"date": date, "emails": [dict(r) for r in rows], "total": len(rows)}
 
 @router.get("/timeline")
@@ -132,6 +139,7 @@ async def badges():
 
 @router.post("/compute")
 async def compute():
+    """Recompute and cache all analytics."""
     loop = asyncio.get_event_loop()
-    loop.run_in_executor(_executor, compute_all_analytics)
+    loop.run_in_executor(_executor, warm_cache)
     return {"message": "Analytics computation started in background."}

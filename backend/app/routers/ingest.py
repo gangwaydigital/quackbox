@@ -137,6 +137,14 @@ def _run_ingest():
             "finished_at": time.time(), "results": results,
             "elapsed_seconds": elapsed, "current_source": "",
         })
+
+        # Auto-warm analytics cache so dashboard loads instantly
+        if total_imported > 0:
+            try:
+                from app.services.analytics import warm_cache
+                warm_cache()
+            except Exception as e:
+                print(f"⚠️  Cache warming failed (non-fatal): {e}")
     except Exception as e:
         _ingest_status.update({
             "running": False, "phase": "error",

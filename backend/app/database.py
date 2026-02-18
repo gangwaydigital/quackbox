@@ -34,6 +34,7 @@ def init_db(db_path: Path = DB_PATH):
             attachment_names TEXT, created_at TEXT DEFAULT (datetime('now')))""")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_sender_email ON emails(sender_email)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_date_timestamp ON emails(date_timestamp DESC)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_date_sent ON emails(date_sent)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_thread_id ON emails(thread_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_mbox_source ON emails(mbox_source)")
         conn.execute("""CREATE VIRTUAL TABLE IF NOT EXISTS emails_fts USING fts5(

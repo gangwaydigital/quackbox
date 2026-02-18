@@ -8,6 +8,23 @@ import NetworkGraph from './NetworkGraph'
 const COLORS = ['#3b82f6','#8b5cf6','#ec4899','#f59e0b','#10b981','#6366f1']
 const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
 
+const CACHE_KEY = 'quackbox-dashboard-cache'
+
+function getCachedDashboard() {
+  try {
+    const raw = sessionStorage.getItem(CACHE_KEY)
+    if (!raw) return null
+    const cached = JSON.parse(raw)
+    // Expire after 5 minutes
+    if (Date.now() - cached._ts > 300_000) return null
+    return cached
+  } catch { return null }
+}
+
+function setCachedDashboard(data) {
+  try { sessionStorage.setItem(CACHE_KEY, JSON.stringify({ ...data, _ts: Date.now() })) } catch {}
+}
+
 export default function Dashboard() {
   const [volume, setVolume] = useState(null)
   const [contacts, setContacts] = useState(null)
@@ -16,29 +33,62 @@ export default function Dashboard() {
   const [threadStats, setThreadStats] = useState(null)
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [stale, setStale] = useState(false)
+
+  const applyData = (data) => {
+    if (data.volume) setVolume(data.volume)
+    if (data.contacts) setContacts(data.contacts)
+    if (data.heatmap) setHeatmap(data.heatmap)
+    if (data.yearly) setYearly(data.yearly)
+    if (data.thread_stats) setThreadStats(data.thread_stats)
+    if (data.stats) setStats(data.stats)
+  }
 
   useEffect(() => { loadAll() }, [])
+
   const loadAll = async () => {
-    setLoading(true)
+    // SWR: show cached data instantly, refresh in background
+    const cached = getCachedDashboard()
+    if (cached) {
+      applyData(cached)
+      setLoading(false)
+      setStale(true)
+    } else {
+      setLoading(true)
+    }
+
     try {
-      const [vol, cont, heat, yr, ts, st] = await Promise.allSettled([
-        api.getVolume(), api.getTopContacts(15), api.getHeatmap(),
-        api.getYearly(), api.getThreadStats(), api.getStats()])
-      if (vol.status === 'fulfilled') setVolume(vol.value.data)
-      if (cont.status === 'fulfilled') setContacts(cont.value.data)
-      if (heat.status === 'fulfilled') setHeatmap(heat.value.data)
-      if (yr.status === 'fulfilled') setYearly(yr.value.data)
-      if (ts.status === 'fulfilled') setThreadStats(ts.value.data)
-      if (st.status === 'fulfilled') setStats(st.value)
-    } catch (err) { console.error(err) }
-    finally { setLoading(false) }
+      const data = await api.getDashboard()
+      applyData(data)
+      setCachedDashboard(data)
+      setStale(false)
+    } catch (err) {
+      console.error('Dashboard load error:', err)
+      // If no cached data was shown, try individual endpoints as fallback
+      if (!cached) {
+        try {
+          const [vol, cont, heat, yr, ts, st] = await Promise.allSettled([
+            api.getVolume(), api.getTopContacts(15), api.getHeatmap(),
+            api.getYearly(), api.getThreadStats(), api.getStats()])
+          if (vol.status === 'fulfilled') setVolume(vol.value.data)
+          if (cont.status === 'fulfilled') setContacts(cont.value.data)
+          if (heat.status === 'fulfilled') setHeatmap(heat.value.data)
+          if (yr.status === 'fulfilled') setYearly(yr.value.data)
+          if (ts.status === 'fulfilled') setThreadStats(ts.value.data)
+          if (st.status === 'fulfilled') setStats(st.value)
+        } catch (e) { console.error(e) }
+      }
+    } finally {
+      setLoading(false)
+      setStale(false)
+    }
   }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2"><BarChart3 className="w-5 h-5 text-blue-600" />Dashboard</h2>
-        <button onClick={loadAll} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-100 rounded-lg hover:bg-gray-200"><RefreshCw className="w-3.5 h-3.5" />Refresh</button>
+        <button onClick={() => { sessionStorage.removeItem(CACHE_KEY); loadAll() }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-100 rounded-lg hover:bg-gray-200"><RefreshCw className="w-3.5 h-3.5" />Refresh</button>
       </div>
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">

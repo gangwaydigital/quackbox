@@ -10,6 +10,7 @@ async function request(path, options = {}) {
 }
 export const api = {
   getStats: () => request('/stats'),
+  getDashboard: () => request('/analytics/dashboard'),
   getEmails: (params = {}) => { const q = new URLSearchParams(); Object.entries(params).forEach(([k, v]) => { if (v != null && v !== '') q.set(k, v) }); return request(`/emails?${q}`) },
   getEmail: (id) => request(`/emails/${id}`),
   getEmailClean: (id) => request(`/emails/${id}?clean=true`),
