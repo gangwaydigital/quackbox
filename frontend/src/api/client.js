@@ -63,6 +63,10 @@ export const api = {
   getSentiment: () => request('/contacts/sentiment'),
   getAttachments: (params = {}) => { const q = new URLSearchParams(); Object.entries(params).forEach(([k, v]) => { if (v != null && v !== '') q.set(k, v) }); return request(`/attachments?${q}`) },
   getAttachmentStats: () => request('/attachments/stats'),
+  // Attachment downloads & email export
+  getEmailAttachments: (id) => request(`/export/email/${id}/attachments`),
+  downloadAttachmentUrl: (emailId, filename) => `${BASE}/export/email/${emailId}/attachment/${encodeURIComponent(filename)}`,
+  downloadEmlUrl: (emailId) => `${BASE}/export/email/${emailId}/eml`,
   getSettings: () => request('/settings'),
   // Bookmarks
   getBookmarks: (page = 1) => request(`/bookmarks?page=${page}`),

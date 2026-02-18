@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Generator
 
 from app.config import MAX_BODY_LENGTH
+from app.logging_config import get_logger
 from app.utils.email_utils import (
     decode_email_header,
     parse_email_address,
@@ -21,6 +22,8 @@ from app.utils.email_utils import (
     extract_attachments,
     extract_thread_id,
 )
+
+log = get_logger("parser")
 
 
 def parse_mbox(mbox_path: Path, source_name: str = None) -> Generator[dict, None, None]:
@@ -39,7 +42,7 @@ def parse_mbox(mbox_path: Path, source_name: str = None) -> Generator[dict, None
             if record:
                 yield record
         except Exception as e:
-            print(f"  ⚠ Error parsing message {key}: {e}")
+            log.warning("Error parsing message %s: %s", key, e)
             continue
 
     mbox.close()

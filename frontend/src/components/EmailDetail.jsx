@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Paperclip, Tag, Sparkles, MessageSquare, FileText, CheckCircle, User, Quote } from 'lucide-react'
+import { ArrowLeft, Paperclip, Tag, Sparkles, MessageSquare, FileText, CheckCircle, User, Quote, Download } from 'lucide-react'
 import { api } from '../api/client'
 
 export default function EmailDetail() {
@@ -123,6 +123,10 @@ export default function EmailDetail() {
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 disabled:opacity-50">
             <Sparkles className="w-3.5 h-3.5" /> {loadingSimilar ? 'Searching...' : 'Similar'}
           </button>
+          <a href={api.downloadEmlUrl(id)} download
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-50 text-gray-700 rounded-lg hover:bg-gray-100">
+            <Download className="w-3.5 h-3.5" /> Export .eml
+          </a>
         </div>
       </div>
 
@@ -165,10 +169,21 @@ export default function EmailDetail() {
             <span className="text-gray-400 text-xs">{email.mbox_source}</span></div>
         </div>
         {attachments.length > 0 && (
-          <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
-            {attachments.map((name, i) => (
-              <span key={i} className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 rounded text-xs text-gray-600"><Paperclip className="w-3 h-3" /> {name}</span>
-            ))}
+          <div className="pt-2 border-t border-gray-100">
+            <div className="text-xs text-gray-400 mb-1.5 flex items-center gap-1">
+              <Paperclip className="w-3 h-3" /> {attachments.length} attachment{attachments.length !== 1 ? 's' : ''}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {attachments.map((name, i) => (
+                <a key={i} href={api.downloadAttachmentUrl(id, name)} download
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-700 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700 transition-colors group"
+                  title={`Download ${name}`}>
+                  <Paperclip className="w-3 h-3 text-gray-400 group-hover:text-blue-500" />
+                  <span className="truncate max-w-[200px]">{name}</span>
+                  <Download className="w-3 h-3 text-gray-300 group-hover:text-blue-500" />
+                </a>
+              ))}
+            </div>
           </div>
         )}
         {topics.length > 0 && (

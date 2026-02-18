@@ -1,8 +1,12 @@
-"""Export endpoints — CSV + HTML."""
+"""Export endpoints — CSV, HTML, EML, and attachment downloads."""
 from fastapi import APIRouter, Query, HTTPException
-from fastapi.responses import StreamingResponse, HTMLResponse
-import io, html as html_mod
+from fastapi.responses import StreamingResponse, HTMLResponse, Response
+import io
+import html as html_mod
 from app.services.export import export_emails_csv, export_contacts_csv, export_threads_csv
+from app.services.attachment_extractor import (
+    extract_attachment, list_extractable_attachments, export_eml,
+)
 from app.database import get_db
 
 router = APIRouter(prefix="/api/export", tags=["export"])
@@ -80,3 +84,47 @@ async def export_thread_html(thread_id: int):
 <div class="footer">Exported from QuackBox</div>
 </body></html>"""
     return HTMLResponse(content=page_html)
+
+
+@router.get("/email/{email_id}/eml")
+async def export_email_eml(email_id: int):
+    """Export a single email as a downloadable .eml file."""
+    result = export_eml(email_id)
+    if result is None:
+        raise HTTPException(
+            404,
+            "Email not found or original source file is unavailable. "
+            "The mbox/emlx file must be accessible in the data directory."
+        )
+    return Response(
+        content=result["data"],
+        media_type="message/rfc822",
+        headers={"Content-Disposition": f'attachment; filename="{result["filename"]}"'},
+    )
+
+
+@router.get("/email/{email_id}/attachments")
+async def list_email_attachments(email_id: int):
+    """List all extractable attachments for an email with sizes."""
+    attachments = list_extractable_attachments(email_id)
+    return {"email_id": email_id, "attachments": attachments}
+
+
+@router.get("/email/{email_id}/attachment/{filename:path}")
+async def download_attachment(email_id: int, filename: str):
+    """Download a specific attachment from an email."""
+    result = extract_attachment(email_id, filename)
+    if result is None:
+        raise HTTPException(
+            404,
+            f"Attachment '{filename}' not found. "
+            "The original mbox/emlx source file must be accessible."
+        )
+    return Response(
+        content=result["data"],
+        media_type=result["content_type"],
+        headers={
+            "Content-Disposition": f'attachment; filename="{result["filename"]}"',
+            "Content-Length": str(len(result["data"])),
+        },
+    )

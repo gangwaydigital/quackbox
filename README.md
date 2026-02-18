@@ -4,7 +4,7 @@
 
 QuackBox is a self-hosted email intelligence platform that transforms `.mbox` and Apple Mail archives into a searchable, analyzable knowledge base. Explore decades of email with AI-powered search, conversation threading, contact profiling, and interactive visualizations — all running locally in Docker.
 
-![Version](https://img.shields.io/badge/version-3.6.0-blue) ![Stack](https://img.shields.io/badge/stack-Python%20%7C%20React%20%7C%20SQLite-green) ![License](https://img.shields.io/badge/license-MIT-gray)
+![Version](https://img.shields.io/badge/version-3.7.0-blue) ![Stack](https://img.shields.io/badge/stack-Python%20%7C%20React%20%7C%20SQLite-green) ![License](https://img.shields.io/badge/license-MIT-gray)
 
 ---
 
@@ -31,14 +31,14 @@ QuackBox is a self-hosted email intelligence platform that transforms `.mbox` an
 - **Sentiment Analysis** — Contact-level sentiment trends across your archive
 - **Bookmarks & Tags** — Star emails, create color-coded tags, bulk operations from search results
 - **Mailboxes** — Browse by source mailbox with per-source statistics
-- **Attachments** — Searchable file index with type-coded icons, extension filters, and sort controls
+- **Attachments** — Searchable file index with type-coded icons, extension filters, sort controls, and one-click download from original mbox/emlx source files
 
 ### Interface
 - **Sidebar Navigation** — Collapsible left sidebar, persistent state, notification badges for unconfigured features
 - **Dark Mode** — Full dark theme toggle
 - **Keyboard Shortcuts** — Vim-style navigation (`g d`, `g e`, `g t`, `g c`, etc.)
 - **Setup Wizard** — First-run auto-detection with live import progress bar showing per-source counts and elapsed time
-- **Export** — CSV export for emails, contacts, and threads; printable HTML export for thread conversations
+- **Export** — CSV export for emails, contacts, and threads; printable HTML thread export; single-email .eml export; attachment binary download from original source files
 - **Configurable Data Path** — Point `DATA_PATH` to any directory via `.env` instead of copying files
 
 ### Performance
@@ -228,6 +228,9 @@ GET  /api/analytics/badges         # Notification badge counts
 GET  /api/bookmarks/tags           # List tags
 GET  /api/attachments              # File index
 GET  /api/settings                 # Current AI configuration
+GET  /api/export/email/{id}/eml    # Download email as .eml
+GET  /api/export/email/{id}/attachments  # List extractable attachments
+GET  /api/export/email/{id}/attachment/{name}  # Download attachment binary
 GET  /api/export/thread/{id}/html  # Printable thread export
 ```
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { Paperclip, Search, FileText, Image, Film, Music, Archive, File, Code } from 'lucide-react'
+import { Paperclip, Search, FileText, Image, Film, Music, Archive, File, Code, Download } from 'lucide-react'
 import { api } from '../api/client'
 
 const EXT_ICONS = {
@@ -98,21 +98,26 @@ export default function AttachmentIndex() {
         ) : data.items.map((a, i) => {
           const Icon = getIcon(a.extension)
           return (
-            <Link key={`${a.email_id}-${i}`} to={`/email/${a.email_id}`}
-              className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
+            <div key={`${a.email_id}-${i}`} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
               <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
                 style={{ backgroundColor: getColor(a.extension) + '18' }}>
                 <Icon className="w-4 h-4" style={{ color: getColor(a.extension) }} />
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-gray-800 truncate">{a.filename}</div>
+              <Link to={`/email/${a.email_id}`} className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-gray-800 truncate hover:text-blue-600 transition-colors">{a.filename}</div>
                 <div className="text-xs text-gray-400 truncate">{a.subject || '(no subject)'} — {a.sender_name || a.sender_email}</div>
-              </div>
+              </Link>
               <div className="text-xs text-gray-400 flex-shrink-0 text-right">
                 <div>{a.date_sent ? new Date(a.date_sent).toLocaleDateString() : ''}</div>
                 {a.extension && <div className="text-[10px] uppercase font-medium" style={{ color: getColor(a.extension) }}>{a.extension}</div>}
               </div>
-            </Link>
+              <a href={api.downloadAttachmentUrl(a.email_id, a.filename)} download
+                className="flex-shrink-0 p-1.5 rounded-lg hover:bg-blue-50 text-gray-400 hover:text-blue-600 transition-colors"
+                title={`Download ${a.filename}`}
+                onClick={e => e.stopPropagation()}>
+                <Download className="w-4 h-4" />
+              </a>
+            </div>
           )
         })}
       </div>
