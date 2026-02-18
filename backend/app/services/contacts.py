@@ -4,10 +4,8 @@ Contact profiles service.
 Auto-generates CRM-style profiles for every sender:
 communication patterns, topics, response times, relationship scores.
 """
-import json
 import math
 import time
-from collections import defaultdict
 from app.database import get_db
 
 

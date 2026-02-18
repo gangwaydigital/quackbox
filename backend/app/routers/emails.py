@@ -1,7 +1,7 @@
 """Email endpoints — search, filter, similar, semantic."""
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
-from app.models import SearchRequest, SearchResponse, PaginatedResponse, EmailDetail
+from app.models import SearchRequest, SearchResponse, PaginatedResponse
 from app.services.search import full_text_search, filter_emails, get_email_detail, get_senders, get_mbox_sources, instant_search
 from app.services.semantic_search import semantic_search, find_similar, hybrid_search, has_embeddings
 from app.utils.text_cleanup import clean_body_text
@@ -142,7 +142,7 @@ async def advanced_search(
                 LIMIT ? OFFSET ?
             """, params + [page_size, (page - 1) * page_size]).fetchall()
         except Exception as exc:
-            print(f"  ⚠ Advanced search error: {exc}")
+            from app.logging_config import get_logger; get_logger("search").warning("Advanced search error: %s", exc)
             return {"items": [], "total": 0, "page": page, "total_pages": 1}
 
         items = []

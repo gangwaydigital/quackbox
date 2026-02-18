@@ -7,28 +7,47 @@ hybrid search (FTS5 + semantic), and find-similar.
 import numpy as np
 import requests
 from typing import Optional
-from app.config import OLLAMA_BASE_URL, OLLAMA_EMBED_MODEL, EMBEDDING_DIMENSIONS
+from app.config import EMBED_API_URL, EMBED_MODEL, EMBED_API_TYPE, EMBED_API_KEY
 from app.database import get_db
+from app.logging_config import get_logger
+
+log = get_logger("semantic")
 
 
 def _generate_query_embedding(text: str) -> Optional[np.ndarray]:
-    """Generate an embedding for a query string."""
+    """Generate an embedding for a query string. Supports Ollama and OpenAI API formats."""
     try:
-        resp = requests.post(
-            f"{OLLAMA_BASE_URL}/api/embed",
-            json={"model": OLLAMA_EMBED_MODEL, "input": text},
-            timeout=30,
-        )
-        if resp.status_code == 200:
-            data = resp.json()
-            emb = data.get("embeddings", [])
-            if emb:
-                return np.array(emb[0], dtype=np.float32)
-            emb = data.get("embedding")
-            if emb:
-                return np.array(emb, dtype=np.float32)
+        headers = {"Content-Type": "application/json"}
+        if EMBED_API_TYPE == "openai":
+            if EMBED_API_KEY:
+                headers["Authorization"] = f"Bearer {EMBED_API_KEY}"
+            resp = requests.post(
+                f"{EMBED_API_URL}/v1/embeddings",
+                headers=headers,
+                json={"model": EMBED_MODEL, "input": text},
+                timeout=30,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                emb = data.get("data", [])
+                if emb:
+                    return np.array(emb[0]["embedding"], dtype=np.float32)
+        else:
+            resp = requests.post(
+                f"{EMBED_API_URL}/api/embed",
+                json={"model": EMBED_MODEL, "input": text},
+                timeout=30,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                emb = data.get("embeddings", [])
+                if emb:
+                    return np.array(emb[0], dtype=np.float32)
+                emb = data.get("embedding")
+                if emb:
+                    return np.array(emb, dtype=np.float32)
     except Exception as e:
-        print(f"  ⚠ Query embedding error: {e}")
+        log.warning("Query embedding error: %s", e)
     return None
 
 

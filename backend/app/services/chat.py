@@ -3,7 +3,6 @@ RAG Chat service — supports Ollama and OpenAI-compatible endpoints.
 """
 import json
 import requests
-from typing import Optional
 from app.config import CHAT_API_URL, CHAT_API_KEY, CHAT_MODEL, CHAT_API_TYPE
 from app.database import get_db
 from app.services.semantic_search import has_embeddings, hybrid_search
@@ -45,6 +44,7 @@ def search_relevant_emails(query, limit=15):
 
 
 def _fts_search(query, limit=15):
+    """Fallback FTS5 keyword search when embeddings aren't available."""
     with get_db() as conn:
         words = query.strip().split()
         if not words: return []
@@ -72,6 +72,7 @@ def _fts_search(query, limit=15):
 
 
 def _get_archive_context():
+    """Build a one-line summary of the archive for the system prompt."""
     with get_db() as conn:
         total = conn.execute("SELECT COUNT(*) FROM emails").fetchone()[0]
         senders = conn.execute("SELECT COUNT(DISTINCT sender_email) FROM emails").fetchone()[0]
@@ -80,6 +81,7 @@ def _get_archive_context():
 
 
 def build_context(emails):
+    """Format retrieved emails into a text block for the LLM context window."""
     parts = [f"=== RELEVANT EMAILS ({len(emails)} found) ===\n"]
     for i, em in enumerate(emails[:15], 1):
         parts.append(f"--- Email {i} ---")
@@ -94,6 +96,7 @@ def build_context(emails):
 
 
 def chat(question, conversation_history=None, model=None, num_context_emails=15):
+    """RAG chat: retrieve relevant emails, build context, and query the LLM."""
     model = model or CHAT_MODEL
     conversation_history = conversation_history or []
 
@@ -158,6 +161,7 @@ Your job is to:
 
 
 def get_stats_summary():
+    """Quick archive stats for the chat UI header."""
     with get_db() as conn:
         total = conn.execute("SELECT COUNT(*) FROM emails").fetchone()[0]
         senders = conn.execute("SELECT COUNT(DISTINCT sender_email) FROM emails").fetchone()[0]

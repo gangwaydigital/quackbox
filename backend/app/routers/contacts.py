@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from typing import List
 from app.services.contacts import get_contact_profile, list_contacts
 from app.services.contact_merge import find_merge_candidates, merge_contacts
-from app.services.sentiment import analyze_archive_sentiment, score_text
+from app.services.sentiment import analyze_archive_sentiment
 
 router = APIRouter(prefix="/api/contacts", tags=["contacts"])
 

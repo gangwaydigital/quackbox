@@ -112,10 +112,9 @@ class PaginatedResponse(BaseModel):
 
 
 class SearchResult(BaseModel):
-    """Search result with relevance info."""
+    """Search result with relevance and FTS5 highlights."""
     email: EmailSummary
     rank: float = 0.0
-    highlights: dict[str, str] = {}  # field -> highlighted snippet
 
 
 class SearchResponse(BaseModel):

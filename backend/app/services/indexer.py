@@ -7,11 +7,15 @@ import time
 from pathlib import Path
 
 from app.database import get_db
+from app.logging_config import get_logger
 from app.services.parser import parse_mbox, count_messages
 from app.services.emlx_parser import parse_emlx_file, find_emlx_files
 
+log = get_logger("indexer")
+
 
 def ingest_mbox(mbox_path: Path) -> dict:
+    """Ingest a single .mbox file into the database, deduplicating by message_id."""
     start = time.time()
     imported = 0
     skipped = 0
@@ -21,7 +25,7 @@ def ingest_mbox(mbox_path: Path) -> dict:
         source_label = mbox_path.parent.name
     else:
         source_label = mbox_path.name
-    print(f"📨 Ingesting {source_label} ({total} messages)...")
+    log.info("📨 Ingesting %s(%d messages)", source_label, total)
     with get_db() as conn:
         for i, record in enumerate(parse_mbox(mbox_path, source_name=source_label)):
             try:
@@ -34,23 +38,24 @@ def ingest_mbox(mbox_path: Path) -> dict:
                 imported += 1
                 if (i + 1) % 500 == 0:
                     conn.commit()
-                    print(f"  ... processed {i + 1}/{total}")
+                    log.debug("  ... processed %d/%d", i + 1, total)
             except Exception as e:
-                print(f"  ⚠ Error inserting message: {e}")
+                log.warning("  ⚠ Error inserting message: %s", e)
                 errors += 1
                 continue
     duration = time.time() - start
-    print(f"✅ Done: {imported} imported, {skipped} skipped, {errors} errors ({duration:.1f}s)")
+    log.info("✅ Done: %d imported, %d skipped, %d errors (%.1fs)", imported, skipped, errors, duration)
     return {"mbox_file": source_label, "total_messages": total, "imported": imported, "skipped": skipped, "errors": errors, "duration_seconds": round(duration, 2)}
 
 
 def ingest_emlx_mailbox(mailbox_name: str, emlx_files: list[Path]) -> dict:
+    """Ingest Apple Mail .emlx files from a single mailbox."""
     start = time.time()
     imported = 0
     skipped = 0
     errors = 0
     total = len(emlx_files)
-    print(f"📨 Ingesting {mailbox_name} ({total} .emlx messages)...")
+    log.info("📨 Ingesting %s (%d .emlx messages)", mailbox_name, total)
     with get_db() as conn:
         for i, emlx_path in enumerate(emlx_files):
             try:
@@ -67,22 +72,23 @@ def ingest_emlx_mailbox(mailbox_name: str, emlx_files: list[Path]) -> dict:
                 imported += 1
                 if (i + 1) % 500 == 0:
                     conn.commit()
-                    print(f"  ... processed {i + 1}/{total}")
+                    log.debug("  ... processed %d/%d", i + 1, total)
             except Exception as e:
-                print(f"  ⚠ Error processing {emlx_path.name}: {e}")
+                log.warning("  ⚠ Error processing %s: %s", emlx_path.name, e)
                 errors += 1
                 continue
     duration = time.time() - start
-    print(f"✅ Done: {imported} imported, {skipped} skipped, {errors} errors ({duration:.1f}s)")
+    log.info("✅ Done: %d imported, %d skipped, %d errors (%.1fs)", imported, skipped, errors, duration)
     return {"mbox_file": mailbox_name, "total_messages": total, "imported": imported, "skipped": skipped, "errors": errors, "duration_seconds": round(duration, 2)}
 
 
 def ingest_all(data_dir: Path) -> list[dict]:
+    """Auto-discover and ingest all .emlx mailboxes and .mbox files in a directory."""
     results = []
     mailboxes = find_emlx_files(data_dir)
     if mailboxes:
         total_emlx = sum(len(files) for files in mailboxes.values())
-        print(f"Found {len(mailboxes)} mailbox(es) with {total_emlx} total .emlx messages")
+        log.info("Found %d mailbox(es) with %d total .emlx messages", len(mailboxes), total_emlx)
         for mailbox_name in sorted(mailboxes.keys()):
             emlx_files = mailboxes[mailbox_name]
             result = ingest_emlx_mailbox(mailbox_name, emlx_files)
@@ -96,10 +102,10 @@ def ingest_all(data_dir: Path) -> list[dict]:
             mbox_files.append(f)
     mbox_files = list({str(f): f for f in mbox_files}.values())
     if mbox_files:
-        print(f"Found {len(mbox_files)} traditional mbox file(s)")
+        log.info("Found %d traditional mbox file(s)", len(mbox_files))
         for mbox_path in sorted(mbox_files):
             result = ingest_mbox(mbox_path)
             results.append(result)
     if not results:
-        print(f"No email data found in {data_dir}")
+        log.warning("No email data found in %s", data_dir)
     return results

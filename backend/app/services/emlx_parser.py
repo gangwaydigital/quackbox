@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Optional
 
 from app.config import MAX_BODY_LENGTH
+from app.logging_config import get_logger
 from app.utils.email_utils import (
     decode_email_header,
     parse_email_address,
@@ -26,14 +27,17 @@ from app.utils.email_utils import (
     extract_thread_id,
 )
 
+log = get_logger("emlx")
+
 
 def parse_emlx_file(emlx_path: Path, source_name: str = None) -> Optional[dict]:
+    """Parse a single .emlx file into a database-ready record dict."""
     if ".partial." in emlx_path.name:
         return None
     try:
         raw = emlx_path.read_bytes()
     except Exception as e:
-        print(f"  ⚠ Cannot read {emlx_path}: {e}")
+        log.warning("Cannot read %s: %s", emlx_path, e)
         return None
     try:
         first_newline = raw.index(b"\n")
@@ -47,12 +51,13 @@ def parse_emlx_file(emlx_path: Path, source_name: str = None) -> Optional[dict]:
     try:
         msg = email.message_from_bytes(msg_bytes, policy=policy.compat32)
     except Exception as e:
-        print(f"  ⚠ Cannot parse email from {emlx_path.name}: {e}")
+        log.warning("Cannot parse email from %s: %s", emlx_path.name, e)
         return None
     return _message_to_record(msg, source_name or "Unknown")
 
 
 def _message_to_record(msg, source: str) -> Optional[dict]:
+    """Convert an email.message.Message into a flat dict for database insertion."""
     message_id = msg.get("Message-ID", "")
     if message_id:
         message_id = message_id.strip().strip("<>")
@@ -88,6 +93,7 @@ def _message_to_record(msg, source: str) -> Optional[dict]:
 
 
 def find_emlx_files(data_dir: Path) -> dict[str, list[Path]]:
+    """Discover .emlx files grouped by mailbox name."""
     mailboxes = {}
     for emlx_path in data_dir.rglob("*.emlx"):
         if ".partial." in emlx_path.name:
@@ -100,6 +106,7 @@ def find_emlx_files(data_dir: Path) -> dict[str, list[Path]]:
 
 
 def _find_mailbox_name(emlx_path: Path) -> str:
+    """Walk up from an .emlx file to find the parent .mbox folder name."""
     current = emlx_path.parent
     while current != current.parent:
         if current.name.endswith(".mbox"):

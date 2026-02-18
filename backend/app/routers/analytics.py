@@ -5,9 +5,8 @@ from fastapi import APIRouter, Query
 from app.services.analytics import (
     email_volume_by_month, top_contacts, activity_heatmap,
     yearly_summary, mailbox_breakdown, thread_stats,
-    response_time_stats, compute_all_analytics, get_cached,
-    communication_network, dashboard_batch, warm_cache,
-    invalidate_cache, _cached_or_compute
+    response_time_stats, communication_network,
+    dashboard_batch, warm_cache, _cached_or_compute
 )
 from app.database import get_db, get_stats
 from app.services.timeline import get_timeline_milestones, get_notification_counts

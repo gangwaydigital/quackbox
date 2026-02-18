@@ -2,7 +2,6 @@
 
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 

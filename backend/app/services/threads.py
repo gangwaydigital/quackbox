@@ -1,23 +1,38 @@
 """Thread reconstruction service."""
-import json, re, time
+import json
+import re
+import time
 from collections import defaultdict
-from typing import Optional
+
 from app.database import get_db
+from app.logging_config import get_logger
+
+log = get_logger("threads")
 
 RE_PREFIX = re.compile(r'^(?:\s*(?:Re|Fwd|Fw|FWD|RE|FW)\s*[:]\s*)+', re.IGNORECASE)
 
 def normalize_subject(subject):
+    """Strip Re:/Fwd: prefixes and normalize whitespace for thread matching."""
     if not subject: return ""
     s = RE_PREFIX.sub("", subject).strip()
     return re.sub(r'\s+', ' ', s).lower()
 
 def rebuild_threads():
+    """
+    Reconstruct conversation threads from the email archive.
+
+    Phase 1: Groups by In-Reply-To / References headers.
+    Phase 2: Groups remaining emails by normalized subject.
+    Singletons: Every ungrouped email becomes its own thread.
+
+    Returns dict with total_threads, multi_message_threads, singletons, duration.
+    """
     start = time.time()
     with get_db() as conn:
         conn.execute("DELETE FROM threads")
         conn.execute("UPDATE emails SET thread_group_id = NULL")
         rows = conn.execute("SELECT id, message_id, thread_id, subject, sender_email, date_sent, date_timestamp, mbox_source FROM emails ORDER BY date_timestamp ASC").fetchall()
-        print(f"🧵 Rebuilding threads for {len(rows)} emails...")
+        log.info("🧵 Rebuilding threads for %d emails...", len(rows))
         by_msg_id = {}
         children = defaultdict(set)
         subjects = {}
@@ -46,7 +61,7 @@ def rebuild_threads():
                 root_id = find_root(msg_id)
                 root_groups[root_id].append(row)
                 grouped_ids.add(row["id"])
-        print(f"  Phase 1: {len(root_groups)} threads from reply headers")
+        log.info("  Phase 1: %d threads from reply headers", len(root_groups))
         subject_groups = defaultdict(list)
         for row in rows:
             if row["id"] in grouped_ids: continue
@@ -59,13 +74,13 @@ def rebuild_threads():
                 root_groups[key] = group_rows
                 for row in group_rows: grouped_ids.add(row["id"])
                 subject_thread_count += 1
-        print(f"  Phase 2: {subject_thread_count} threads from subject matching")
+        log.info("  Phase 2: %d threads from subject matching", subject_thread_count)
         singleton_count = 0
         for row in rows:
             if row["id"] not in grouped_ids:
                 root_groups[f"single:{row['id']}"] = [row]
                 singleton_count += 1
-        print(f"  Singletons: {singleton_count}")
+        log.info("  Singletons: %d", singleton_count)
         thread_count = 0; multi_count = 0
         for root_key, group_rows in root_groups.items():
             group_rows.sort(key=lambda r: r["date_timestamp"] or 0)
@@ -87,12 +102,13 @@ def rebuild_threads():
             for r in group_rows: conn.execute("UPDATE emails SET thread_group_id = ? WHERE id = ?", (tid, r["id"]))
             thread_count += 1
             if len(group_rows) > 1: multi_count += 1
-            if thread_count % 5000 == 0: conn.commit(); print(f"  ... processed {thread_count} threads")
+            if thread_count % 5000 == 0: conn.commit(); log.debug("  ... processed %d threads", thread_count)
     duration_s = time.time() - start
-    print(f"✅ Thread rebuild complete: {multi_count} conversations, {singleton_count} singletons ({duration_s:.1f}s)")
+    log.info("✅ Thread rebuild complete: %d conversations, %d singletons (%.1fs)", multi_count, singleton_count, duration_s)
     return {"total_threads": thread_count, "multi_message_threads": multi_count, "singletons": singleton_count, "duration_seconds": round(duration_s, 2)}
 
 def get_threads(min_messages=2, sort_by="last_date", sort_order="desc", page=1, page_size=50):
+    """List threads with pagination, filtered by minimum message count."""
     allowed = {"last_date", "message_count", "participant_count", "duration_seconds"}
     if sort_by not in allowed: sort_by = "last_date"
     sort_dir = "ASC" if sort_order == "asc" else "DESC"
@@ -108,6 +124,7 @@ def get_threads(min_messages=2, sort_by="last_date", sort_order="desc", page=1, 
         return {"items": items, "total": total, "page": page, "page_size": page_size, "total_pages": max(1, (total + page_size - 1) // page_size)}
 
 def get_thread_detail(thread_id):
+    """Get full thread with all emails, participants, and metadata."""
     with get_db() as conn:
         thread = conn.execute("SELECT * FROM threads WHERE id = ?", (thread_id,)).fetchone()
         if not thread: return None
@@ -125,6 +142,7 @@ def get_thread_detail(thread_id):
         return thread_data
 
 def get_thread_participants(thread_id):
+    """Get participants in a thread with message counts per sender."""
     with get_db() as conn:
         rows = conn.execute("SELECT sender_email, sender_name, COUNT(*) as message_count FROM emails WHERE thread_group_id = ? GROUP BY sender_email ORDER BY message_count DESC", (thread_id,)).fetchall()
         return [dict(r) for r in rows]

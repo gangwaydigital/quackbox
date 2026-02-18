@@ -1,5 +1,4 @@
 """Timeline milestones — key moments in the email archive."""
-from collections import defaultdict
 from app.database import get_db
 
 

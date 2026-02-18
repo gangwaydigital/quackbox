@@ -1,7 +1,7 @@
 """
 AI-powered topic clustering service.
 
-Uses Ollama to generate embeddings, then clusters them
+Uses embeddings to generate vector representations, then clusters them
 to discover email topics automatically.
 """
 
@@ -20,11 +20,8 @@ from app.config import (
     EMBED_API_KEY,
     EMBED_MODEL,
     EMBED_API_TYPE,
-    EMBEDDING_DIMENSIONS,
     DEFAULT_NUM_CLUSTERS,
     MIN_CLUSTER_SIZE,
-    OLLAMA_BASE_URL,
-    OLLAMA_EMBED_MODEL,
 )
 from app.database import get_db
 
@@ -80,7 +77,7 @@ def generate_embedding(text: str) -> Optional[list[float]]:
             return data.get("embedding")
         return None
     except Exception as e:
-        print(f"  ⚠ Embedding error: {e}")
+        log.warning("Embedding error: %s", e)
         return None
 
 
@@ -114,7 +111,7 @@ def generate_all_embeddings(batch_size: int = 50, regenerate: bool = False) -> d
         """).fetchall()
 
         total = len(rows)
-        print(f"🧠 Generating embeddings for {total} emails...")
+        log.info("🧠 Generating embeddings for %d emails...", total)
 
         for i, row in enumerate(rows):
             # Create embedding input: combine subject + sender + body snippet
@@ -142,7 +139,7 @@ def generate_all_embeddings(batch_size: int = 50, regenerate: bool = False) -> d
 
             if (i + 1) % batch_size == 0:
                 conn.commit()
-                print(f"  ... {i + 1}/{total} ({generated} generated)")
+                log.debug("  ... %d/%d (%d generated)", i + 1, total, generated)
 
     duration = time.time() - start
     result = {
@@ -152,7 +149,7 @@ def generate_all_embeddings(batch_size: int = 50, regenerate: bool = False) -> d
         "errors": errors,
         "duration_seconds": round(duration, 2),
     }
-    print(f"✅ Embeddings done: {generated} generated, {errors} errors ({duration:.1f}s)")
+    log.info("✅ Embeddings done: %d generated, %d errors (%.1fs)", generated, errors, duration)
     return result
 
 
@@ -189,12 +186,12 @@ def cluster_topics(num_clusters: Optional[int] = None) -> dict:
             for row in rows
         ])
 
-        print(f"🔬 Clustering {len(embeddings)} emails...")
+        log.info("🔬 Clustering %d emails...", len(embeddings))
 
         # Determine optimal cluster count if not specified
         if num_clusters is None:
             num_clusters = _find_optimal_clusters(embeddings)
-            print(f"  Auto-selected {num_clusters} clusters")
+            log.info("  Auto-selected %d clusters", num_clusters)
 
         # Run K-Means
         kmeans = KMeans(n_clusters=num_clusters, random_state=42, n_init=10)
