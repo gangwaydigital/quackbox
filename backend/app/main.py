@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.database import init_db, get_stats
 from app.routers import emails, topics, ingest, chat, threads, analytics, contacts, export, attachments, bookmarks, settings
 
-APP_VERSION = "3.2.0"
+APP_VERSION = "3.4.0"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

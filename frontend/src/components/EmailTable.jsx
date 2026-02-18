@@ -60,9 +60,13 @@ export default function EmailTable({ emails, loading, pagination, onPageChange, 
                   )}
                 </div>
                 <div className="text-sm text-gray-800 truncate mt-0.5">
-                  {highlightText(email.subject || '(no subject)', searchQuery)}
+                  {email.highlight_subject
+                    ? <span dangerouslySetInnerHTML={{ __html: email.highlight_subject }} />
+                    : highlightText(email.subject || '(no subject)', searchQuery)}
                 </div>
-                {email.snippet && <div className="text-xs text-gray-400 truncate mt-0.5">{highlightText(email.snippet, searchQuery)}</div>}
+                {email.highlight_body
+                  ? <div className="text-xs text-gray-400 mt-0.5 truncate search-preview-hl" dangerouslySetInnerHTML={{ __html: email.highlight_body }} />
+                  : email.snippet && <div className="text-xs text-gray-400 truncate mt-0.5">{highlightText(email.snippet, searchQuery)}</div>}
               </div>
               <div className="text-xs text-gray-400 whitespace-nowrap flex-shrink-0">{formatDate(email.date_sent)}</div>
             </div>

@@ -192,7 +192,11 @@ function EmailsPage() {
           setPagination({ page: 1, total: data.total || 0, total_pages: 1 })
         } else {
           const data = await api.searchEmails(searchQuery, params.page || 1)
-          setEmails(data.results.map(r => r.email))
+          setEmails(data.results.map(r => ({
+            ...r.email,
+            highlight_subject: r.email.highlight_subject || null,
+            highlight_body: r.email.highlight_body || null,
+          })))
           setPagination({ page: data.page, total: data.total, total_pages: Math.ceil(data.total / 50) })
         }
       } else {

@@ -15,6 +15,7 @@ export const api = {
   getEmail: (id) => request(`/emails/${id}`),
   getEmailClean: (id) => request(`/emails/${id}?clean=true`),
   searchEmails: (q, page = 1, ps = 50) => request(`/emails/search?q=${encodeURIComponent(q)}&page=${page}&page_size=${ps}`),
+  instantSearch: (q, limit = 8) => request(`/emails/instant?q=${encodeURIComponent(q)}&limit=${limit}`),
   advancedSearch: (params = {}) => { const q = new URLSearchParams(); Object.entries(params).forEach(([k, v]) => { if (v != null && v !== '') q.set(k, v) }); return request(`/emails/advanced-search?${q}`) },
   semanticSearch: (q, limit = 20) => request(`/emails/semantic-search?q=${encodeURIComponent(q)}&limit=${limit}`),
   hybridSearch: (q, limit = 20) => request(`/emails/hybrid-search?q=${encodeURIComponent(q)}&limit=${limit}`),

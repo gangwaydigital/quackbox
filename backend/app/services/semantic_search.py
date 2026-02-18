@@ -58,6 +58,7 @@ def semantic_search(query: str, limit: int = 20) -> list[dict]:
     """
     Search emails by semantic similarity to the query.
     Embeds the query, then finds nearest neighbors.
+    Uses batch email lookup instead of N individual queries.
     """
     query_vec = _generate_query_embedding(query)
     if query_vec is None:
@@ -69,18 +70,30 @@ def semantic_search(query: str, limit: int = 20) -> list[dict]:
             return []
 
         scores = _cosine_similarity(query_vec, matrix)
-        top_indices = np.argsort(scores)[::-1][:limit]
+        top_indices = np.argsort(scores)[::-1][:limit * 2]  # over-fetch to filter low scores
 
+        # Filter to meaningful scores and collect IDs
+        candidates = [(ids[idx], float(scores[idx])) for idx in top_indices if scores[idx] >= 0.1]
+        candidates = candidates[:limit]
+
+        if not candidates:
+            return []
+
+        # Batch lookup all emails in ONE query
+        email_ids = [c[0] for c in candidates]
+        score_map = {c[0]: c[1] for c in candidates}
+        placeholders = ",".join("?" * len(email_ids))
+        rows = conn.execute(f"""
+            SELECT id, subject, sender_name, sender_email, date_sent,
+                   body_text, mbox_source, thread_group_id
+            FROM emails WHERE id IN ({placeholders})
+        """, email_ids).fetchall()
+
+        # Build lookup and return in score order
+        row_map = {r["id"]: r for r in rows}
         results = []
-        for idx in top_indices:
-            email_id = ids[idx]
-            score = float(scores[idx])
-            if score < 0.1:
-                continue
-            row = conn.execute(
-                "SELECT id, message_id, subject, sender_name, sender_email, date_sent, body_text, mbox_source, thread_group_id FROM emails WHERE id = ?",
-                (email_id,)
-            ).fetchone()
+        for eid, score in candidates:
+            row = row_map.get(eid)
             if row:
                 results.append({
                     "id": row["id"],
@@ -99,7 +112,6 @@ def semantic_search(query: str, limit: int = 20) -> list[dict]:
 def find_similar(email_id: int, limit: int = 10) -> list[dict]:
     """Find emails similar to a given email by comparing embeddings."""
     with get_db() as conn:
-        # Get this email's embedding
         row = conn.execute("SELECT embedding FROM embeddings WHERE email_id = ?", (email_id,)).fetchone()
         if not row:
             return []
@@ -118,18 +130,27 @@ def find_similar(email_id: int, limit: int = 10) -> list[dict]:
         except ValueError:
             pass
 
-        top_indices = np.argsort(scores)[::-1][:limit]
+        top_indices = np.argsort(scores)[::-1][:limit * 2]
+        candidates = [(ids[idx], float(scores[idx])) for idx in top_indices if scores[idx] >= 0.1]
+        candidates = candidates[:limit]
 
+        if not candidates:
+            return []
+
+        # Batch lookup
+        email_ids = [c[0] for c in candidates]
+        score_map = {c[0]: c[1] for c in candidates}
+        placeholders = ",".join("?" * len(email_ids))
+        rows = conn.execute(f"""
+            SELECT id, subject, sender_name, sender_email, date_sent,
+                   body_text, mbox_source, thread_group_id
+            FROM emails WHERE id IN ({placeholders})
+        """, email_ids).fetchall()
+
+        row_map = {r["id"]: r for r in rows}
         results = []
-        for idx in top_indices:
-            eid = ids[idx]
-            score = float(scores[idx])
-            if score < 0.1:
-                continue
-            r = conn.execute(
-                "SELECT id, subject, sender_name, sender_email, date_sent, body_text, mbox_source, thread_group_id FROM emails WHERE id = ?",
-                (eid,)
-            ).fetchone()
+        for eid, score in candidates:
+            r = row_map.get(eid)
             if r:
                 results.append({
                     "id": r["id"],

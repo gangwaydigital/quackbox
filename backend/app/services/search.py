@@ -1,15 +1,24 @@
 """
 Search and filter service.
 
-Handles full-text search via FTS5 and structured
-filtering/sorting of emails.
+Features:
+- FTS5 full-text search with BM25 column weighting
+- FTS5 snippet() for real highlighted context
+- Prefix search (typing "projec" finds "project")
+- Phrase search support ("exact phrase")
+- Instant search endpoint (lightweight, no COUNT)
 """
 
 import json
+import re
 from typing import Optional
 
 from app.database import get_db
 from app.utils.email_utils import make_snippet
+
+
+# BM25 column weights: subject=10, sender_name=5, sender_email=3, body_text=1
+BM25_WEIGHTS = "10.0, 5.0, 3.0, 1.0"
 
 
 def full_text_search(
@@ -18,44 +27,48 @@ def full_text_search(
     page_size: int = 50,
 ) -> dict:
     """
-    Full-text search across email subjects, senders, and bodies.
-
-    Uses SQLite FTS5 with BM25 ranking.
-
-    Returns:
-        dict with results, total count, and pagination info
+    Full-text search with BM25 ranking and FTS5 snippet highlights.
     """
     offset = (page - 1) * page_size
 
     with get_db() as conn:
-        # Escape FTS5 special characters in user query
         safe_query = _sanitize_fts_query(query)
 
         # Count total matches
-        total = conn.execute(
-            "SELECT COUNT(*) FROM emails_fts WHERE emails_fts MATCH ?",
-            (safe_query,)
-        ).fetchone()[0]
+        try:
+            total = conn.execute(
+                "SELECT COUNT(*) FROM emails_fts WHERE emails_fts MATCH ?",
+                (safe_query,)
+            ).fetchone()[0]
+        except Exception:
+            return {"results": [], "total": 0, "query": query, "page": page, "page_size": page_size}
 
-        # Get ranked results
-        rows = conn.execute("""
-            SELECT
-                e.*,
-                rank
-            FROM emails_fts
-            JOIN emails e ON e.id = emails_fts.rowid
-            WHERE emails_fts MATCH ?
-            ORDER BY rank
-            LIMIT ? OFFSET ?
-        """, (safe_query, page_size, offset)).fetchall()
+        # Get ranked results with FTS5 snippet highlights
+        try:
+            rows = conn.execute(f"""
+                SELECT
+                    e.*,
+                    bm25(emails_fts, {BM25_WEIGHTS}) as rank,
+                    snippet(emails_fts, 0, '<mark>', '</mark>', '…', 12) as subj_hl,
+                    snippet(emails_fts, 3, '<mark>', '</mark>', '…', 24) as body_hl
+                FROM emails_fts
+                JOIN emails e ON e.id = emails_fts.rowid
+                WHERE emails_fts MATCH ?
+                ORDER BY bm25(emails_fts, {BM25_WEIGHTS})
+                LIMIT ? OFFSET ?
+            """, (safe_query, page_size, offset)).fetchall()
+        except Exception as exc:
+            print(f"  ⚠ FTS5 search error: {exc}")
+            return {"results": [], "total": 0, "query": query, "page": page, "page_size": page_size}
 
         results = []
         for row in rows:
             email_data = _row_to_summary(row)
+            email_data["highlight_subject"] = row["subj_hl"] or None
+            email_data["highlight_body"] = row["body_hl"] or None
             results.append({
                 "email": email_data,
                 "rank": abs(row["rank"]),
-                "highlights": _get_highlights(row, query),
             })
 
         return {
@@ -65,6 +78,41 @@ def full_text_search(
             "page": page,
             "page_size": page_size,
         }
+
+
+def instant_search(query: str, limit: int = 8) -> list[dict]:
+    """
+    Lightweight instant search for typeahead preview.
+    No COUNT query, small result set, fast.
+    """
+    with get_db() as conn:
+        safe_query = _sanitize_fts_query(query)
+        try:
+            rows = conn.execute(f"""
+                SELECT
+                    e.id, e.subject, e.sender_name, e.sender_email,
+                    e.date_sent, e.has_attachments, e.thread_group_id,
+                    bm25(emails_fts, {BM25_WEIGHTS}) as rank,
+                    snippet(emails_fts, 3, '<mark>', '</mark>', '…', 10) as body_hl
+                FROM emails_fts
+                JOIN emails e ON e.id = emails_fts.rowid
+                WHERE emails_fts MATCH ?
+                ORDER BY bm25(emails_fts, {BM25_WEIGHTS})
+                LIMIT ?
+            """, (safe_query, limit)).fetchall()
+        except Exception:
+            return []
+
+        return [{
+            "id": r["id"],
+            "subject": r["subject"],
+            "sender_name": r["sender_name"],
+            "sender_email": r["sender_email"],
+            "date_sent": r["date_sent"],
+            "has_attachments": bool(r["has_attachments"]),
+            "thread_group_id": r["thread_group_id"],
+            "body_highlight": r["body_hl"],
+        } for r in rows]
 
 
 def filter_emails(
@@ -81,12 +129,7 @@ def filter_emails(
     page: int = 1,
     page_size: int = 50,
 ) -> dict:
-    """
-    Filter and sort emails with pagination.
-
-    Returns:
-        dict with items, total count, and pagination info
-    """
+    """Filter and sort emails with pagination."""
     conditions = []
     params = []
 
@@ -104,7 +147,7 @@ def filter_emails(
 
     if date_to:
         conditions.append("e.date_sent <= ?")
-        params.append(date_to)
+        params.append(date_to + "T23:59:59" if len(date_to) == 10 else date_to)
 
     if subject_contains:
         conditions.append("e.subject LIKE ?")
@@ -118,7 +161,6 @@ def filter_emails(
         conditions.append("e.has_attachments = ?")
         params.append(int(has_attachments))
 
-    # Topic filter via join
     join_clause = ""
     if topic_id is not None:
         join_clause = "JOIN email_topics et ON et.email_id = e.id"
@@ -127,7 +169,6 @@ def filter_emails(
 
     where_clause = " AND ".join(conditions) if conditions else "1=1"
 
-    # Validate sort column
     allowed_sorts = {"date_timestamp", "sender_email", "subject"}
     if sort_by not in allowed_sorts:
         sort_by = "date_timestamp"
@@ -136,13 +177,11 @@ def filter_emails(
     offset = (page - 1) * page_size
 
     with get_db() as conn:
-        # Count
         total = conn.execute(
             f"SELECT COUNT(*) FROM emails e {join_clause} WHERE {where_clause}",
             params
         ).fetchone()[0]
 
-        # Fetch page
         rows = conn.execute(f"""
             SELECT e.* FROM emails e
             {join_clause}
@@ -173,7 +212,6 @@ def get_email_detail(email_id: int) -> Optional[dict]:
         data["recipients"] = json.loads(data.get("recipients") or "[]")
         data["attachment_names"] = json.loads(data.get("attachment_names") or "[]")
 
-        # Get associated topics
         topics = conn.execute("""
             SELECT t.id, t.label, t.description, t.keywords, t.email_count, et.confidence
             FROM topics t
@@ -207,7 +245,6 @@ def get_senders(limit: int = 100) -> list[dict]:
             ORDER BY email_count DESC
             LIMIT ?
         """, (limit,)).fetchall()
-
         return [dict(row) for row in rows]
 
 
@@ -221,11 +258,10 @@ def get_mbox_sources() -> list[dict]:
             GROUP BY mbox_source
             ORDER BY mbox_source
         """).fetchall()
-
         return [dict(row) for row in rows]
 
 
-# -- Internal helpers --
+# ── Internal helpers ─────────────────────────────────────────
 
 def _row_to_summary(row) -> dict:
     """Convert a database row to an email summary dict."""
@@ -239,7 +275,6 @@ def _row_to_summary(row) -> dict:
         "has_attachments": bool(row["has_attachments"]),
         "snippet": make_snippet(row["body_text"] or ""),
     }
-    # Include thread_group_id if available (may not exist in all queries)
     try:
         data["thread_group_id"] = row["thread_group_id"]
     except (IndexError, KeyError):
@@ -251,37 +286,53 @@ def _sanitize_fts_query(query: str) -> str:
     """
     Sanitize user input for FTS5 query syntax.
 
-    Wraps each word in quotes to prevent FTS5 syntax errors
-    from special characters.
+    Supports:
+    - Phrase search: "exact phrase" passes through
+    - Prefix search: last term gets * appended for typeahead
+    - Multi-word: implicit AND between terms
+    - Special chars: stripped to prevent FTS5 syntax errors
     """
-    words = query.strip().split()
-    if not words:
+    query = query.strip()
+    if not query:
         return '""'
-    # Quote each term and join with implicit AND
-    return " ".join(f'"{w}"' for w in words)
 
+    # Preserve user-quoted phrases
+    phrases = []
+    def _save_phrase(m):
+        phrases.append(m.group(0))
+        return f"__PHRASE{len(phrases) - 1}__"
 
-def _get_highlights(row, query: str) -> dict:
-    """
-    Generate simple highlight snippets showing where query matched.
+    processed = re.sub(r'"[^"]*"', _save_phrase, query)
 
-    TODO: Use FTS5 highlight() function for more accurate highlights.
-    """
-    highlights = {}
-    query_lower = query.lower()
+    # Clean remaining terms: strip FTS5 operators and special chars
+    remaining = re.sub(r'[^\w\s]', ' ', processed)
+    words = remaining.split()
 
-    for field in ("subject", "sender_name", "body_text"):
-        value = row[field] or ""
-        if query_lower in value.lower():
-            # Find the match position and extract context
-            idx = value.lower().index(query_lower)
-            start = max(0, idx - 50)
-            end = min(len(value), idx + len(query) + 50)
-            snippet = value[start:end]
-            if start > 0:
-                snippet = "…" + snippet
-            if end < len(value):
-                snippet = snippet + "…"
-            highlights[field] = snippet
+    parts = []
+    for w in words:
+        # Restore saved phrases
+        m = re.match(r'__PHRASE(\d+)__', w)
+        if m:
+            parts.append(phrases[int(m.group(1))])
+        elif w.upper() in ('AND', 'OR', 'NOT', 'NEAR'):
+            # Pass through FTS5 boolean operators
+            parts.append(w.upper())
+        elif len(w) >= 2:
+            parts.append(f'"{w}"')
 
-    return highlights
+    if not parts:
+        return '""'
+
+    result = " ".join(parts)
+
+    # Add prefix matching to the last non-phrase, non-operator term
+    # This enables typeahead: "projec" matches "project"
+    if not query.endswith('"') and parts:
+        last = parts[-1]
+        if last.startswith('"') and last.endswith('"') and last.upper() not in ('AND', 'OR', 'NOT', 'NEAR'):
+            inner = last[1:-1]
+            if len(inner) >= 2:
+                parts[-1] = f'"{inner}"*'
+                result = " ".join(parts)
+
+    return result

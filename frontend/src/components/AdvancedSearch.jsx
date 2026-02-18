@@ -64,7 +64,7 @@ export default function AdvancedSearch() {
       </h2>
 
       <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
-        <div className="text-[10px] text-gray-400">Results update as you type. Supports AND, OR, NOT in keywords.</div>
+        <div className="text-[10px] text-gray-400">Results update as you type · Supports AND, OR, NOT · "quoted phrases" · prefix matching (type "projec" to find "project")</div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           <div>
             <label className="text-xs text-gray-500 mb-1 block flex items-center gap-1"><Search className="w-3 h-3" /> Keywords</label>
@@ -118,12 +118,20 @@ export default function AdvancedSearch() {
                 <Link key={e.id} to={'/email/' + e.id}
                   className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors">
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-gray-800 truncate">{e.subject || '(no subject)'}</div>
+                    <div className="text-sm font-medium text-gray-800 truncate">
+                      {e.highlight_subject
+                        ? <span dangerouslySetInnerHTML={{ __html: e.highlight_subject }} />
+                        : (e.subject || '(no subject)')}
+                    </div>
                     <div className="text-xs text-gray-400">
                       {e.sender_name || e.sender_email}
                       {e.date_sent ? ' · ' + new Date(e.date_sent).toLocaleDateString() : ''}
                       {e.mbox_source ? ' · ' + e.mbox_source : ''}
                     </div>
+                    {e.highlight_body && (
+                      <div className="text-xs text-gray-400 mt-0.5 truncate search-preview-hl"
+                        dangerouslySetInnerHTML={{ __html: e.highlight_body }} />
+                    )}
                   </div>
                   {e.has_attachments ? <Paperclip className="w-3 h-3 text-gray-300 flex-shrink-0" /> : null}
                 </Link>

@@ -4,7 +4,7 @@
 
 QuackBox is a self-hosted email intelligence platform that transforms `.mbox` and Apple Mail archives into a searchable, analyzable knowledge base. Explore decades of email with AI-powered search, conversation threading, contact profiling, and interactive visualizations — all running locally in Docker.
 
-![Version](https://img.shields.io/badge/version-3.2.0-blue) ![Stack](https://img.shields.io/badge/stack-Python%20%7C%20React%20%7C%20SQLite-green) ![License](https://img.shields.io/badge/license-MIT-gray)
+![Version](https://img.shields.io/badge/version-3.4.0-blue) ![Stack](https://img.shields.io/badge/stack-Python%20%7C%20React%20%7C%20SQLite-green) ![License](https://img.shields.io/badge/license-MIT-gray)
 
 ---
 
@@ -13,7 +13,8 @@ QuackBox is a self-hosted email intelligence platform that transforms `.mbox` an
 ### Core
 - **Dashboard** — Volume trends, top contacts, activity heatmap, year-over-year breakdown, communication network treemap, thread insights
 - **Email Browser** — Full-text search (FTS5), filter by sender/date/mailbox/attachments, pagination, sort controls
-- **Advanced Search** — Boolean operators (AND / OR / NOT), date range pickers, realtime results as you type with 350ms debounce
+- **Advanced Search** — Boolean operators (AND / OR / NOT), "quoted phrases", prefix matching, date range pickers, FTS5-powered with BM25 relevance ranking and highlighted snippets
+- **Instant Search Preview** — Typeahead dropdown shows top results as you type with highlighted context, keyboard navigation (↑↓ Enter), and search history
 - **Calendar** — Monthly heat-mapped grid with day drilldown showing email density
 - **Timeline** — Scrollable milestone view: first/last emails, busiest days, volume surges, first contact from top senders, biggest threads, email count milestones (#1K, #5K, #10K…)
 
@@ -38,6 +39,17 @@ QuackBox is a self-hosted email intelligence platform that transforms `.mbox` an
 - **Keyboard Shortcuts** — Vim-style navigation (`g d`, `g e`, `g t`, `g c`, etc.)
 - **Setup Wizard** — First-run auto-detection with live import progress bar showing per-source counts and elapsed time
 - **Export** — CSV export for emails, contacts, and threads; printable HTML export for thread conversations
+- **Configurable Data Path** — Point `DATA_PATH` to any directory via `.env` instead of copying files
+
+### Performance
+- **Batch Dashboard API** — Single endpoint loads all dashboard data in one request instead of 6
+- **Write-Through Caching** — Analytics auto-cache on first compute with 1-hour TTL; no manual "Compute" step needed
+- **Auto Cache Warming** — Analytics cache pre-populates after email import completes
+- **Client-Side SWR** — Dashboard shows cached data instantly on revisit while refreshing in the background
+- **Optimized Queries** — Batch sparkline loading (N+1 → 2 queries), index-friendly calendar date ranges
+- **BM25 Ranked Search** — Column-weighted relevance scoring (subject 10×, sender 5×, body 1×) for better search results
+- **FTS5 Everywhere** — Advanced Search uses FTS5 instead of slow LIKE queries; instant search skips COUNT for speed
+- **Batch Semantic Lookups** — Similar/semantic search fetches all results in one query instead of N individual lookups
 
 ---
 
@@ -48,23 +60,28 @@ QuackBox is a self-hosted email intelligence platform that transforms `.mbox` an
 - **Docker** & **Docker Compose**
 - **Ollama** (optional — for AI features like chat, topics, summarization, semantic search)
 
-### 1. Clone & add your data
+### 1. Clone & point to your data
 
 ```bash
 git clone https://github.com/YOUR_USERNAME/quackbox.git
 cd quackbox
-mkdir -p data
 ```
 
-Copy your email archives into `data/`:
+**Option A** — Use the default `data/` directory:
 
 ```bash
-# Gmail Takeout, Thunderbird exports, etc.
+mkdir -p data
 cp ~/path/to/All\ mail.mbox data/
-
-# Apple Mail (copy the entire V10 folder)
-cp -r ~/Library/Mail/V10 data/
+cp -r ~/Library/Mail/V10 data/     # Apple Mail
 ```
+
+**Option B** — Point to an existing mail directory:
+
+```bash
+echo "DATA_PATH=/Users/you/Library/Mail/V10" > .env
+```
+
+Any path works — external drives, Google Takeout folders, Thunderbird profiles, etc. See `.env.example` for more examples.
 
 ### 2. (Optional) Start Ollama
 

@@ -2,7 +2,7 @@
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 from app.models import SearchRequest, SearchResponse, PaginatedResponse, EmailDetail
-from app.services.search import full_text_search, filter_emails, get_email_detail, get_senders, get_mbox_sources
+from app.services.search import full_text_search, filter_emails, get_email_detail, get_senders, get_mbox_sources, instant_search
 from app.services.semantic_search import semantic_search, find_similar, hybrid_search, has_embeddings
 from app.utils.text_cleanup import clean_body_text
 
@@ -21,6 +21,11 @@ async def list_emails(
         date_from=date_from, date_to=date_to, subject_contains=subject_contains,
         mbox_source=mbox_source, topic_id=topic_id, has_attachments=has_attachments,
         sort_by=sort_by, sort_order=sort_order, page=page, page_size=page_size)
+
+@router.get("/instant")
+async def instant_search_endpoint(q: str = Query(..., min_length=1), limit: int = Query(8, ge=1, le=20)):
+    """Lightweight instant search for typeahead — no COUNT, small payload."""
+    return {"results": instant_search(q, limit=limit)}
 
 @router.post("/search", response_model=SearchResponse)
 async def search_emails(request: SearchRequest):
@@ -59,55 +64,49 @@ async def advanced_search(
     sort_by: str = Query("date_timestamp"), sort_order: str = Query("desc"),
     page: int = Query(1, ge=1), page_size: int = Query(50, ge=1, le=200),
 ):
-    """Advanced search with combined filters."""
+    """
+    Advanced search: FTS5 for keywords + SQL filters for structured criteria.
+    Much faster than the old LIKE-based approach on large archives.
+    """
     from app.database import get_db
+    from app.services.search import _sanitize_fts_query, BM25_WEIGHTS
+
     with get_db() as conn:
         conditions = []
         params = []
+        use_fts = bool(q and q.strip())
 
-        if q:
-            # Support basic boolean: split by AND/OR
-            words = q.strip()
-            if ' OR ' in words:
-                parts = [w.strip() for w in words.split(' OR ')]
-                or_conds = []
-                for p in parts:
-                    or_conds.append("(subject LIKE ? OR sender_name LIKE ? OR body_text LIKE ?)")
-                    params.extend([f"%{p}%", f"%{p}%", f"%{p}%"])
-                conditions.append("(" + " OR ".join(or_conds) + ")")
-            elif ' NOT ' in words:
-                parts = words.split(' NOT ', 1)
-                conditions.append("(subject LIKE ? OR sender_name LIKE ? OR body_text LIKE ?)")
-                params.extend([f"%{parts[0].strip()}%"] * 3)
-                conditions.append("NOT (subject LIKE ? OR sender_name LIKE ? OR body_text LIKE ?)")
-                params.extend([f"%{parts[1].strip()}%"] * 3)
-            else:
-                # AND logic (default)
-                for word in words.split():
-                    if word.upper() == 'AND':
-                        continue
-                    conditions.append("(subject LIKE ? OR sender_name LIKE ? OR sender_email LIKE ? OR body_text LIKE ?)")
-                    params.extend([f"%{word}%"] * 4)
+        # FTS5 keyword search — replaces the old LIKE chain
+        if use_fts:
+            safe_query = _sanitize_fts_query(q)
+            fts_join = f"""
+                JOIN emails_fts ON emails_fts.rowid = e.id
+                    AND emails_fts MATCH ?
+            """
+            params.append(safe_query)
+        else:
+            fts_join = ""
 
+        # Structured filters
         if sender:
-            conditions.append("(sender_email LIKE ? OR sender_name LIKE ?)")
+            conditions.append("(e.sender_email LIKE ? OR e.sender_name LIKE ?)")
             params.extend([f"%{sender}%", f"%{sender}%"])
         if date_from:
-            conditions.append("date_sent >= ?")
+            conditions.append("e.date_sent >= ?")
             params.append(date_from)
         if date_to:
-            conditions.append("date_sent <= ?")
+            conditions.append("e.date_sent <= ?")
             params.append(date_to + "T23:59:59" if len(date_to) == 10 else date_to)
         if mbox_source:
-            conditions.append("mbox_source = ?")
+            conditions.append("e.mbox_source = ?")
             params.append(mbox_source)
         if has_attachments is not None:
-            conditions.append("has_attachments = ?")
+            conditions.append("e.has_attachments = ?")
             params.append(1 if has_attachments else 0)
         if bookmarked:
-            conditions.append("id IN (SELECT email_id FROM bookmarks)")
+            conditions.append("e.id IN (SELECT email_id FROM bookmarks)")
         if tag_id:
-            conditions.append("id IN (SELECT email_id FROM email_tags WHERE tag_id = ?)")
+            conditions.append("e.id IN (SELECT email_id FROM email_tags WHERE tag_id = ?)")
             params.append(tag_id)
 
         where = " AND ".join(conditions) if conditions else "1=1"
@@ -115,17 +114,45 @@ async def advanced_search(
         sb = sort_by if sort_by in valid_sorts else "date_timestamp"
         so = "ASC" if sort_order.lower() == "asc" else "DESC"
 
-        total = conn.execute(f"SELECT COUNT(*) FROM emails WHERE {where}", params).fetchone()[0]
-        rows = conn.execute(f"""
-            SELECT id, subject, sender_name, sender_email, date_sent, mbox_source,
-                   has_attachments, thread_group_id
-            FROM emails WHERE {where}
-            ORDER BY {sb} {so}
-            LIMIT ? OFFSET ?
-        """, params + [page_size, (page - 1) * page_size]).fetchall()
+        # Use BM25 rank for ordering when doing FTS, otherwise user-specified sort
+        order = f"bm25(emails_fts, {BM25_WEIGHTS})" if use_fts and sb == "date_timestamp" else f"e.{sb} {so}"
+        if use_fts and sb != "date_timestamp":
+            order = f"e.{sb} {so}"
+
+        try:
+            total = conn.execute(
+                f"SELECT COUNT(*) FROM emails e {fts_join} WHERE {where}", params
+            ).fetchone()[0]
+
+            # Build SELECT with optional FTS5 highlights
+            if use_fts:
+                select_cols = """e.id, e.subject, e.sender_name, e.sender_email, e.date_sent,
+                    e.mbox_source, e.has_attachments, e.thread_group_id,
+                    snippet(emails_fts, 0, '<mark>', '</mark>', '…', 12) as highlight_subject,
+                    snippet(emails_fts, 3, '<mark>', '</mark>', '…', 20) as highlight_body"""
+            else:
+                select_cols = """e.id, e.subject, e.sender_name, e.sender_email, e.date_sent,
+                    e.mbox_source, e.has_attachments, e.thread_group_id"""
+
+            rows = conn.execute(f"""
+                SELECT {select_cols}
+                FROM emails e {fts_join}
+                WHERE {where}
+                ORDER BY {order}
+                LIMIT ? OFFSET ?
+            """, params + [page_size, (page - 1) * page_size]).fetchall()
+        except Exception as exc:
+            print(f"  ⚠ Advanced search error: {exc}")
+            return {"items": [], "total": 0, "page": page, "total_pages": 1}
+
+        items = []
+        for r in rows:
+            item = dict(r)
+            item["has_attachments"] = bool(item.get("has_attachments"))
+            items.append(item)
 
         return {
-            "items": [dict(r) for r in rows],
+            "items": items,
             "total": total, "page": page,
             "total_pages": max(1, (total + page_size - 1) // page_size),
         }
