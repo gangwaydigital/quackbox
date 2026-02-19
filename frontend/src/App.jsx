@@ -23,6 +23,7 @@ import TimelineView from './components/Timeline'
 import SetupWizard from './components/SetupWizard'
 import AdvancedSearch from './components/AdvancedSearch'
 import Deduplication from './components/Deduplication'
+import ImportStatus from './components/ImportStatus'
 
 const ThemeCtx = createContext()
 export const useTheme = () => useContext(ThemeCtx)

@@ -3,6 +3,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom'
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { Layers, ArrowLeft, Mail, Users, Clock, Paperclip, MessageSquare, Download } from 'lucide-react'
 import { api } from '../api/client'
+import ImportStatus from './ImportStatus'
 
 const COLORS = ['#3b82f6','#8b5cf6','#ec4899','#f59e0b','#10b981','#6366f1','#ef4444','#14b8a6']
 
@@ -29,7 +30,11 @@ export function MailboxList() {
   const maxCount = sorted.length ? Math.max(...sorted.map(m => m.count)) : 1
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      {/* Import source status panel */}
+      <ImportStatus />
+
+      <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
           <Layers className="w-5 h-5 text-blue-600" /> Mailboxes
@@ -79,6 +84,7 @@ export function MailboxList() {
           ))}
         </div>
       )}
+      </div>  {/* end mailboxes section */}
     </div>
   )
 }

@@ -166,6 +166,31 @@ def init_db(db_path: Path = DB_PATH):
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_dup_email ON duplicate_emails(email_id)")
 
+        # -- Incremental ingestion tracking --
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS ingest_sources (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source_name TEXT UNIQUE NOT NULL,
+                source_type TEXT NOT NULL,
+                source_path TEXT,
+                file_size INTEGER DEFAULT 0,
+                file_mtime REAL DEFAULT 0,
+                last_message_offset INTEGER DEFAULT 0,
+                emails_total INTEGER DEFAULT 0,
+                last_ingest_at TEXT DEFAULT (datetime('now')),
+                last_ingest_new INTEGER DEFAULT 0,
+                last_ingest_skipped INTEGER DEFAULT 0
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS ingest_emlx_files (
+                path TEXT PRIMARY KEY,
+                source_name TEXT NOT NULL,
+                ingested_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_emlx_source ON ingest_emlx_files(source_name)")
+
     print(f"✅ Database initialized at {db_path}")
 
 def get_stats(db_path: Path = DB_PATH):

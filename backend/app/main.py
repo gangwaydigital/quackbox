@@ -6,7 +6,7 @@ from app.database import init_db, get_stats
 from app.logging_config import setup_logging
 from app.routers import emails, topics, ingest, chat, threads, analytics, contacts, export, attachments, bookmarks, settings, deduplication
 
-APP_VERSION = "3.8.0"
+APP_VERSION = "3.9.0"
 
 log = setup_logging()
 
