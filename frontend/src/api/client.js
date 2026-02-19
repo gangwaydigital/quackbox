@@ -87,6 +87,12 @@ export const api = {
   getDuplicates: (page = 1, pageSize = 20) => request(`/duplicates?page=${page}&page_size=${pageSize}`),
   deleteDuplicates: (body) => request('/duplicates/delete', { method: 'POST', body: JSON.stringify(body) }),
   dismissDuplicate: (groupId) => request(`/duplicates/${groupId}`, { method: 'DELETE' }),
+  // Saved searches
+  getSavedSearches: () => request('/saved-searches'),
+  createSavedSearch: (body) => request('/saved-searches', { method: 'POST', body: JSON.stringify(body) }),
+  deleteSavedSearch: (id) => request(`/saved-searches/${id}`, { method: 'DELETE' }),
+  updateSavedSearch: (id, body) => request(`/saved-searches/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  recordSavedSearchRun: (id) => request(`/saved-searches/${id}/run`, { method: 'POST' }),
   // Attachment preview & content search
   getAttachmentPreview: (emailId, filename) => request(`/attachments/${emailId}/${encodeURIComponent(filename)}/preview`),
   searchAttachmentContent: (q, page = 1) => request(`/attachments/search/content?q=${encodeURIComponent(q)}&page=${page}`),

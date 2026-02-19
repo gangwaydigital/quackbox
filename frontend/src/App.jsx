@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext } from 'react'
+import { useState, useEffect, useRef, createContext, useContext } from 'react'
 import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   Mail, Tags, BarChart3, MessageCircle, MessageSquare, Users, Moon, Sun,
@@ -22,6 +22,7 @@ import AttachmentIndex from './components/Attachments'
 import TimelineView from './components/Timeline'
 import SetupWizard from './components/SetupWizard'
 import AdvancedSearch from './components/AdvancedSearch'
+import EmailPane from './components/EmailPane'
 import Deduplication from './components/Deduplication'
 import ImportStatus from './components/ImportStatus'
 
@@ -293,12 +294,16 @@ function ThemeToggleMobile() {
 }
 
 function EmailsPage() {
-  const [emails, setEmails] = useState([])
-  const [filters, setFilters] = useState({})
+  const [emails, setEmails]           = useState([])
+  const [filters, setFilters]         = useState({})
   const [searchQuery, setSearchQuery] = useState('')
-  const [searchMode, setSearchMode] = useState('keyword')
-  const [pagination, setPagination] = useState({ page: 1, total: 0, total_pages: 1 })
-  const [loading, setLoading] = useState(true)
+  const [searchMode, setSearchMode]   = useState('keyword')
+  const [pagination, setPagination]   = useState({ page: 1, total: 0, total_pages: 1 })
+  const [loading, setLoading]         = useState(true)
+  const [selectedId, setSelectedId]   = useState(null)
+  const [paneWidth, setPaneWidth]     = useState(42)   // % of container for the reading pane
+  const dragging    = useRef(false)
+  const containerRef = useRef(null)
 
   const fetchEmails = async (params = {}) => {
     setLoading(true)
@@ -313,7 +318,7 @@ function EmailsPage() {
           setEmails(data.results.map(r => ({
             ...r.email,
             highlight_subject: r.email.highlight_subject || null,
-            highlight_body: r.email.highlight_body || null,
+            highlight_body:    r.email.highlight_body    || null,
           })))
           setPagination({ page: data.page, total: data.total, total_pages: Math.ceil(data.total / 50) })
         }
@@ -328,22 +333,111 @@ function EmailsPage() {
 
   useEffect(() => { fetchEmails() }, [filters, searchQuery, searchMode])
 
+  // j/k keyboard navigation
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
+      if (e.key === 'j' || e.key === 'ArrowDown') {
+        e.preventDefault()
+        setSelectedId(prev => {
+          if (!emails.length) return prev
+          const idx = emails.findIndex(em => String(em.id) === String(prev))
+          return String(emails[Math.min(idx + 1, emails.length - 1)].id)
+        })
+      }
+      if (e.key === 'k' || e.key === 'ArrowUp') {
+        e.preventDefault()
+        setSelectedId(prev => {
+          if (!emails.length) return prev
+          const idx = emails.findIndex(em => String(em.id) === String(prev))
+          return String(emails[Math.max(idx - 1, 0)].id)
+        })
+      }
+      if (e.key === 'Escape') setSelectedId(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [emails])
+
+  // Drag divider to resize pane
+  const onDividerMouseDown = (e) => {
+    e.preventDefault()
+    dragging.current = true
+    const onMove = (ev) => {
+      if (!dragging.current || !containerRef.current) return
+      const rect = containerRef.current.getBoundingClientRect()
+      const raw  = ((ev.clientX - rect.left) / rect.width) * 100
+      setPaneWidth(Math.min(Math.max(100 - raw, 25), 70))
+    }
+    const onUp = () => {
+      dragging.current = false
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
+
+  const paneOpen = !!selectedId
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <SearchBar
-        onSearch={(q) => { setSearchQuery(q); setFilters({}) }}
+        onSearch={(q) => { setSearchQuery(q); setFilters({}); setSelectedId(null) }}
         onModeChange={setSearchMode}
         searchMode={searchMode} />
-      <div className="flex flex-col md:flex-row gap-4 md:gap-6">
-        <FilterPanel onFilter={(f) => { setSearchQuery(''); setFilters(f) }} currentFilters={filters} />
-        <div className="flex-1 min-w-0">
+
+      <div className="flex flex-col md:flex-row gap-4 md:gap-0" ref={containerRef}>
+        {/* Filter sidebar */}
+        <div className="md:w-48 lg:w-56 flex-shrink-0 md:pr-4">
+          <FilterPanel
+            onFilter={(f) => { setSearchQuery(''); setFilters(f); setSelectedId(null) }}
+            currentFilters={filters} />
+        </div>
+
+        {/* Email list column */}
+        <div
+          className="flex-1 min-w-0 md:min-w-[260px]"
+          style={paneOpen ? { flexBasis: `${100 - paneWidth}%`, flexGrow: 0, flexShrink: 0 } : {}}>
           <EmailTable
             emails={emails}
             loading={loading}
             pagination={pagination}
             onPageChange={(page) => fetchEmails({ page })}
-            searchQuery={searchQuery} />
+            searchQuery={searchQuery}
+            onSelect={(email) => setSelectedId(prev => String(prev) === String(email.id) ? null : String(email.id))}
+            selectedId={selectedId} />
+          {paneOpen && (
+            <p className="mt-2 text-[10px] text-gray-300 text-center hidden md:block select-none">
+              j / k to navigate · Esc to close
+            </p>
+          )}
         </div>
+
+        {/* Drag-to-resize divider */}
+        {paneOpen && (
+          <div
+            onMouseDown={onDividerMouseDown}
+            className="hidden md:flex w-2 flex-shrink-0 cursor-col-resize items-center justify-center group select-none">
+            <div className="w-0.5 h-12 bg-gray-200 group-hover:bg-blue-400 rounded-full transition-colors" />
+          </div>
+        )}
+
+        {/* Reading pane — desktop inline */}
+        {paneOpen && (
+          <div
+            className="hidden md:block overflow-y-auto border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-950 rounded-xl shadow-sm"
+            style={{ flexBasis: `${paneWidth}%`, flexGrow: 0, flexShrink: 0, maxHeight: 'calc(100vh - 130px)' }}>
+            <EmailPane emailId={selectedId} onClose={() => setSelectedId(null)} compact />
+          </div>
+        )}
+
+        {/* Reading pane — mobile full-screen */}
+        {paneOpen && (
+          <div className="md:hidden fixed inset-0 z-40 bg-white dark:bg-gray-950 overflow-y-auto">
+            <EmailPane emailId={selectedId} onClose={() => setSelectedId(null)} />
+          </div>
+        )}
       </div>
     </div>
   )

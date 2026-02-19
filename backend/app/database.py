@@ -191,6 +191,24 @@ def init_db(db_path: Path = DB_PATH):
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_emlx_source ON ingest_emlx_files(source_name)")
 
+        # -- Saved searches / smart folders --
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS saved_searches (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                query TEXT,
+                sender TEXT,
+                date_from TEXT,
+                date_to TEXT,
+                has_attachments BOOLEAN DEFAULT 0,
+                mbox_source TEXT,
+                color TEXT DEFAULT '#3b82f6',
+                run_count INTEGER DEFAULT 0,
+                last_run_at TEXT,
+                created_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
+
     print(f"✅ Database initialized at {db_path}")
 
 def get_stats(db_path: Path = DB_PATH):
