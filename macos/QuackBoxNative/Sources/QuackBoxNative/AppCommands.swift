@@ -1,9 +1,24 @@
+import AppKit
 import SwiftUI
 
 struct MailCommands: Commands {
     @ObservedObject var state: MailAppState
 
     var body: some Commands {
+        CommandGroup(replacing: .appInfo) {
+            Button("About QuackBoxNative") {
+                let aboutText = """
+                Quackbox is project concieved by Duck.
+
+                Duck made this a reality and the world is a better place for it.
+                """
+                NSApp.orderFrontStandardAboutPanel(options: [
+                    .credits: NSAttributedString(string: aboutText)
+                ])
+                NSApp.activate(ignoringOtherApps: true)
+            }
+        }
+
         CommandMenu("Message") {
             Button("Next") { state.selectNextMessage() }
                 .keyboardShortcut("j", modifiers: [])

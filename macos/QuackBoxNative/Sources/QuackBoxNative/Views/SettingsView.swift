@@ -437,6 +437,14 @@ struct SettingsView: View {
 
     private var generalPane: some View {
         VStack(alignment: .leading, spacing: 16) {
+            GroupBox("About") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Quackbox is project concieved by Duck.")
+                    Text("Duck made this a reality and the world is a better place for it.")
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
             GroupBox("Backend") {
                 VStack(alignment: .leading, spacing: 10) {
                     TextField("http://127.0.0.1:8000", text: $serverURLInput)
