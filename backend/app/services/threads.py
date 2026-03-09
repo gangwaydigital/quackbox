@@ -17,6 +17,15 @@ def normalize_subject(subject):
     s = RE_PREFIX.sub("", subject).strip()
     return re.sub(r'\s+', ' ', s).lower()
 
+
+def _safe_text(value):
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        value = str(value)
+    cleaned = value.encode("utf-8", errors="replace").decode("utf-8", errors="replace")
+    return "".join(ch for ch in cleaned if ch >= " " or ch in "\n\r\t")
+
 def rebuild_threads():
     """
     Reconstruct conversation threads from the email archive.
@@ -120,6 +129,11 @@ def get_threads(min_messages=2, sort_by="last_date", sort_order="desc", page=1, 
         for row in rows:
             item = dict(row)
             item["mailbox_sources"] = json.loads(item.get("mailbox_sources") or "[]")
+            item["subject_normalized"] = _safe_text(item.get("subject_normalized"))
+            item["original_subject"] = _safe_text(item.get("original_subject"))
+            item["root_message_id"] = _safe_text(item.get("root_message_id"))
+            item["first_date"] = _safe_text(item.get("first_date"))
+            item["last_date"] = _safe_text(item.get("last_date"))
             items.append(item)
         return {"items": items, "total": total, "page": page, "page_size": page_size, "total_pages": max(1, (total + page_size - 1) // page_size)}
 
@@ -130,14 +144,26 @@ def get_thread_detail(thread_id):
         if not thread: return None
         thread_data = dict(thread)
         thread_data["mailbox_sources"] = json.loads(thread_data.get("mailbox_sources") or "[]")
+        thread_data["root_message_id"] = _safe_text(thread_data.get("root_message_id"))
+        thread_data["subject_normalized"] = _safe_text(thread_data.get("subject_normalized"))
+        thread_data["first_date"] = _safe_text(thread_data.get("first_date"))
+        thread_data["last_date"] = _safe_text(thread_data.get("last_date"))
         emails = conn.execute("SELECT id, message_id, subject, sender_name, sender_email, recipients, date_sent, date_timestamp, body_text, has_attachments, attachment_names, mbox_source FROM emails WHERE thread_group_id = ? ORDER BY date_timestamp ASC", (thread_id,)).fetchall()
         thread_data["emails"] = []
         for row in emails:
             email = dict(row)
             email["recipients"] = json.loads(email.get("recipients") or "[]")
             email["attachment_names"] = json.loads(email.get("attachment_names") or "[]")
+            email["has_attachments"] = bool(email.get("has_attachments"))
+            email["message_id"] = _safe_text(email.get("message_id"))
+            email["subject"] = _safe_text(email.get("subject"))
+            email["sender_name"] = _safe_text(email.get("sender_name"))
+            email["sender_email"] = _safe_text(email.get("sender_email"))
+            email["date_sent"] = _safe_text(email.get("date_sent"))
+            email["mbox_source"] = _safe_text(email.get("mbox_source"))
             if email["body_text"] and len(email["body_text"]) > 2000:
                 email["body_text"] = email["body_text"][:2000] + "\n[truncated]"
+            email["body_text"] = _safe_text(email.get("body_text"))
             thread_data["emails"].append(email)
         return thread_data
 

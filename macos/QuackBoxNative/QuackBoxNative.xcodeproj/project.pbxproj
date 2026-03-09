@@ -1,0 +1,387 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		06E0DC034B7D095A400BE1C6 /* RootSplitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28E2AB8822776A749F7477F2 /* RootSplitView.swift */; };
+		2EC373687FE39035A1B4212E /* EmailDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F37CE253FDB7336CD09CE4D1 /* EmailDetailView.swift */; };
+		3913FD0DCDDAB1C13F346464 /* WebModuleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C426D33DA2805CA2D7F16AF6 /* WebModuleView.swift */; };
+		3AE92968BB258820E62438C0 /* LocalStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C96027E6FF62F6EDAECFB055 /* LocalStore.swift */; };
+		60F6F04A5E028B63D198D982 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D0721CD5DB75C687F6FCBB4 /* NotificationService.swift */; };
+		6AD6730801DB352B8F273C0C /* MailAppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0729717491D97E8339061A68 /* MailAppState.swift */; };
+		6F3667B160CBB4A977CEE5DE /* ThreadDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F2F4873C1F650D53CF68CB /* ThreadDetailView.swift */; };
+		8976A1127358F9F3CA096824 /* AppCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = 556923AAE981322FDFF416F3 /* AppCommands.swift */; };
+		900683FD8C17877D09698787 /* RichTextEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A605F692E4BD8121D0F4F3BF /* RichTextEditor.swift */; };
+		928B4252C8ADFD14A0C128DC /* QuackBoxAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = B67E4B98FC17E3E0E79A2DE2 /* QuackBoxAPI.swift */; };
+		A9776700BE73A7AE4BAA2962 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = E46A4BFCB8F499C33C66547C /* Models.swift */; };
+		D4ED77C3735F3B6C57DC0AD1 /* ComposeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4C80BB90D129B3A694D7CDD /* ComposeView.swift */; };
+		DA3695F524D69D16B16F346B /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA659EA13124EC4F7D95BADC /* SettingsView.swift */; };
+		E5B2EC373CC9AC2AFA71A37B /* QuackBoxNativeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 856A933F17EC9B88C528490C /* QuackBoxNativeApp.swift */; };
+		FD25D35B98C4C98026695B3A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D2EE7D2C564384C12D52CC53 /* Assets.xcassets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		0729717491D97E8339061A68 /* MailAppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MailAppState.swift; sourceTree = "<group>"; };
+		09F2F4873C1F650D53CF68CB /* ThreadDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadDetailView.swift; sourceTree = "<group>"; };
+		1B0D227A8EECC380B67B60FA /* QuackBoxNative.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = QuackBoxNative.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		28E2AB8822776A749F7477F2 /* RootSplitView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootSplitView.swift; sourceTree = "<group>"; };
+		556923AAE981322FDFF416F3 /* AppCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCommands.swift; sourceTree = "<group>"; };
+		856A933F17EC9B88C528490C /* QuackBoxNativeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuackBoxNativeApp.swift; sourceTree = "<group>"; };
+		9D0721CD5DB75C687F6FCBB4 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
+		A605F692E4BD8121D0F4F3BF /* RichTextEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RichTextEditor.swift; sourceTree = "<group>"; };
+		B67E4B98FC17E3E0E79A2DE2 /* QuackBoxAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuackBoxAPI.swift; sourceTree = "<group>"; };
+		BA659EA13124EC4F7D95BADC /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		C426D33DA2805CA2D7F16AF6 /* WebModuleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebModuleView.swift; sourceTree = "<group>"; };
+		C4C80BB90D129B3A694D7CDD /* ComposeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposeView.swift; sourceTree = "<group>"; };
+		C96027E6FF62F6EDAECFB055 /* LocalStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalStore.swift; sourceTree = "<group>"; };
+		D2EE7D2C564384C12D52CC53 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		E46A4BFCB8F499C33C66547C /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		F37CE253FDB7336CD09CE4D1 /* EmailDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailDetailView.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		15A0C9064FF4B94E87F48177 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				1B0D227A8EECC380B67B60FA /* QuackBoxNative.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		581A254C5B2B442F26A0F0C2 /* QuackBoxNative */ = {
+			isa = PBXGroup;
+			children = (
+				556923AAE981322FDFF416F3 /* AppCommands.swift */,
+				C96027E6FF62F6EDAECFB055 /* LocalStore.swift */,
+				0729717491D97E8339061A68 /* MailAppState.swift */,
+				E46A4BFCB8F499C33C66547C /* Models.swift */,
+				9D0721CD5DB75C687F6FCBB4 /* NotificationService.swift */,
+				B67E4B98FC17E3E0E79A2DE2 /* QuackBoxAPI.swift */,
+				856A933F17EC9B88C528490C /* QuackBoxNativeApp.swift */,
+				D5770EB8B600AE3BE9569B5A /* Views */,
+			);
+			path = QuackBoxNative;
+			sourceTree = "<group>";
+		};
+		5A58E15546AD2AE33E122060 = {
+			isa = PBXGroup;
+			children = (
+				B45DA83FD6029BEFCBF2E33A /* Resources */,
+				5B8FBD9AEE85D3E4983F390C /* Sources */,
+				15A0C9064FF4B94E87F48177 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		5B8FBD9AEE85D3E4983F390C /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				581A254C5B2B442F26A0F0C2 /* QuackBoxNative */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		B45DA83FD6029BEFCBF2E33A /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				D2EE7D2C564384C12D52CC53 /* Assets.xcassets */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		D5770EB8B600AE3BE9569B5A /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				C4C80BB90D129B3A694D7CDD /* ComposeView.swift */,
+				F37CE253FDB7336CD09CE4D1 /* EmailDetailView.swift */,
+				A605F692E4BD8121D0F4F3BF /* RichTextEditor.swift */,
+				28E2AB8822776A749F7477F2 /* RootSplitView.swift */,
+				BA659EA13124EC4F7D95BADC /* SettingsView.swift */,
+				09F2F4873C1F650D53CF68CB /* ThreadDetailView.swift */,
+				C426D33DA2805CA2D7F16AF6 /* WebModuleView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		005E36D324FAF8E57B8EA754 /* QuackBoxNative */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7D023401A165F958E63A971B /* Build configuration list for PBXNativeTarget "QuackBoxNative" */;
+			buildPhases = (
+				5E5BBDFDEEAD9C40090E9B80 /* Sources */,
+				E493397671C75EF63066A6C8 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = QuackBoxNative;
+			packageProductDependencies = (
+			);
+			productName = QuackBoxNative;
+			productReference = 1B0D227A8EECC380B67B60FA /* QuackBoxNative.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		BCA5E19F0B9F4EDB1E5E1D1E /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+			};
+			buildConfigurationList = 4FE7DFB4705C34A26B270351 /* Build configuration list for PBXProject "QuackBoxNative" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 5A58E15546AD2AE33E122060;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				005E36D324FAF8E57B8EA754 /* QuackBoxNative */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		E493397671C75EF63066A6C8 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FD25D35B98C4C98026695B3A /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		5E5BBDFDEEAD9C40090E9B80 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8976A1127358F9F3CA096824 /* AppCommands.swift in Sources */,
+				D4ED77C3735F3B6C57DC0AD1 /* ComposeView.swift in Sources */,
+				2EC373687FE39035A1B4212E /* EmailDetailView.swift in Sources */,
+				3AE92968BB258820E62438C0 /* LocalStore.swift in Sources */,
+				6AD6730801DB352B8F273C0C /* MailAppState.swift in Sources */,
+				A9776700BE73A7AE4BAA2962 /* Models.swift in Sources */,
+				60F6F04A5E028B63D198D982 /* NotificationService.swift in Sources */,
+				928B4252C8ADFD14A0C128DC /* QuackBoxAPI.swift in Sources */,
+				E5B2EC373CC9AC2AFA71A37B /* QuackBoxNativeApp.swift in Sources */,
+				900683FD8C17877D09698787 /* RichTextEditor.swift in Sources */,
+				06E0DC034B7D095A400BE1C6 /* RootSplitView.swift in Sources */,
+				DA3695F524D69D16B16F346B /* SettingsView.swift in Sources */,
+				6F3667B160CBB4A977CEE5DE /* ThreadDetailView.swift in Sources */,
+				3913FD0DCDDAB1C13F346464 /* WebModuleView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		02D3067C073D12E95F4E00B0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.9;
+			};
+			name = Debug;
+		};
+		0D5F9F80564D896D9BA76F31 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 26D104;
+				ENABLE_HARDENED_RUNTIME = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "QuackBox Email";
+				INFOPLIST_KEY_CFBundleIconName = AppIcon;
+				INFOPLIST_KEY_CFBundleShortVersionString = "$(MARKETING_VERSION)";
+				INFOPLIST_KEY_CFBundleVersion = "$(CURRENT_PROJECT_VERSION)";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = v.69;
+				PRODUCT_BUNDLE_IDENTIFIER = com.quackbox.native;
+				PRODUCT_NAME = QuackBoxNative;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		126D09FD2C7942D557207879 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.9;
+			};
+			name = Release;
+		};
+		CC4100A6B4AC7CF9C997C0AC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 26D104;
+				ENABLE_HARDENED_RUNTIME = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "QuackBox Email";
+				INFOPLIST_KEY_CFBundleIconName = AppIcon;
+				INFOPLIST_KEY_CFBundleShortVersionString = "$(MARKETING_VERSION)";
+				INFOPLIST_KEY_CFBundleVersion = "$(CURRENT_PROJECT_VERSION)";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = v.69;
+				PRODUCT_BUNDLE_IDENTIFIER = com.quackbox.native;
+				PRODUCT_NAME = QuackBoxNative;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		4FE7DFB4705C34A26B270351 /* Build configuration list for PBXProject "QuackBoxNative" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				02D3067C073D12E95F4E00B0 /* Debug */,
+				126D09FD2C7942D557207879 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		7D023401A165F958E63A971B /* Build configuration list for PBXNativeTarget "QuackBoxNative" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0D5F9F80564D896D9BA76F31 /* Debug */,
+				CC4100A6B4AC7CF9C997C0AC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = BCA5E19F0B9F4EDB1E5E1D1E /* Project object */;
+}

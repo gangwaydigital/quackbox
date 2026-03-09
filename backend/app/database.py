@@ -209,6 +209,63 @@ def init_db(db_path: Path = DB_PATH):
             )
         """)
 
+        # -- Native client accounts (IMAP/SMTP) --
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS mail_accounts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                display_name TEXT NOT NULL,
+                email_address TEXT NOT NULL UNIQUE,
+                imap_host TEXT NOT NULL,
+                imap_port INTEGER NOT NULL DEFAULT 993,
+                imap_security TEXT NOT NULL DEFAULT 'ssl',
+                imap_username TEXT NOT NULL,
+                imap_password TEXT,
+                smtp_host TEXT NOT NULL,
+                smtp_port INTEGER NOT NULL DEFAULT 587,
+                smtp_security TEXT NOT NULL DEFAULT 'starttls',
+                smtp_username TEXT NOT NULL,
+                smtp_password TEXT,
+                oauth_provider TEXT,
+                oauth_client_id TEXT,
+                oauth_client_secret TEXT,
+                oauth_refresh_token TEXT,
+                oauth_access_token TEXT,
+                oauth_token_url TEXT,
+                oauth_expires_at TEXT,
+                enabled BOOLEAN DEFAULT 1,
+                created_at TEXT DEFAULT (datetime('now')),
+                updated_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_mail_accounts_enabled ON mail_accounts(enabled)")
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS mail_sync_state (
+                account_id INTEGER REFERENCES mail_accounts(id) ON DELETE CASCADE,
+                folder_name TEXT NOT NULL,
+                last_uid INTEGER DEFAULT 0,
+                last_sync_at TEXT,
+                last_error TEXT,
+                PRIMARY KEY (account_id, folder_name)
+            )
+        """)
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS mail_sync_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                account_id INTEGER REFERENCES mail_accounts(id) ON DELETE CASCADE,
+                folder_name TEXT NOT NULL,
+                started_at TEXT DEFAULT (datetime('now')),
+                completed_at TEXT,
+                fetched_count INTEGER DEFAULT 0,
+                inserted_count INTEGER DEFAULT 0,
+                skipped_count INTEGER DEFAULT 0,
+                status TEXT NOT NULL DEFAULT 'running',
+                error TEXT
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_mail_sync_runs_account ON mail_sync_runs(account_id, started_at DESC)")
+
     print(f"✅ Database initialized at {db_path}")
 
 def get_stats(db_path: Path = DB_PATH):

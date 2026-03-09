@@ -231,7 +231,7 @@ def get_email_detail(email_id: int) -> Optional[dict]:
             for t in topics
         ]
 
-        return data
+        return _json_safe(data)
 
 
 def get_senders(limit: int = 100) -> list[dict]:
@@ -267,19 +267,41 @@ def _row_to_summary(row) -> dict:
     """Convert a database row to an email summary dict."""
     data = {
         "id": row["id"],
-        "message_id": row["message_id"],
-        "subject": row["subject"],
-        "sender_name": row["sender_name"],
-        "sender_email": row["sender_email"],
-        "date_sent": row["date_sent"],
+        "message_id": _safe_text(row["message_id"]),
+        "subject": _safe_text(row["subject"]),
+        "sender_name": _safe_text(row["sender_name"]),
+        "sender_email": _safe_text(row["sender_email"]),
+        "date_sent": _safe_text(row["date_sent"]),
         "has_attachments": bool(row["has_attachments"]),
-        "snippet": make_snippet(row["body_text"] or ""),
+        "snippet": _safe_text(make_snippet(row["body_text"] or "")),
     }
     try:
         data["thread_group_id"] = row["thread_group_id"]
     except (IndexError, KeyError):
         pass
     return data
+
+
+def _safe_text(value: Optional[str]) -> Optional[str]:
+    """Normalize invalid Unicode/control chars so API JSON stays decodable."""
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        value = str(value)
+    cleaned = value.encode("utf-8", errors="replace").decode("utf-8", errors="replace")
+    # Keep common whitespace controls only.
+    cleaned = "".join(ch for ch in cleaned if ch >= " " or ch in "\n\r\t")
+    return cleaned
+
+
+def _json_safe(value):
+    if isinstance(value, str):
+        return _safe_text(value)
+    if isinstance(value, list):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    return value
 
 
 def _sanitize_fts_query(query: str) -> str:

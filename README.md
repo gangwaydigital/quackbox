@@ -228,6 +228,10 @@ GET  /api/analytics/badges         # Notification badge counts
 GET  /api/bookmarks/tags           # List tags
 GET  /api/attachments              # File index
 GET  /api/settings                 # Current AI configuration
+GET  /api/accounts                 # List native-client IMAP/SMTP accounts
+POST /api/accounts                 # Create IMAP/SMTP account
+POST /api/accounts/{id}/sync       # Sync account inbox via IMAP
+POST /api/accounts/{id}/send       # Send message via SMTP
 GET  /api/export/email/{id}/eml    # Download email as .eml
 GET  /api/export/email/{id}/attachments  # List extractable attachments
 GET  /api/export/email/{id}/attachment/{name}  # Download attachment binary
@@ -250,6 +254,25 @@ docker compose logs -f backend
 ```
 
 The database persists in a Docker volume (`db-data`). Email data lives in `data/` which is gitignored.
+
+---
+
+## Native macOS App
+
+This repo now includes a native SwiftUI macOS client at:
+
+`macos/QuackBoxNative`
+
+Quick run:
+
+```bash
+cd macos/QuackBoxNative
+open Package.swift
+```
+
+Then run the `QuackBoxNative` target in Xcode while the backend is running at `http://127.0.0.1:8000`.
+
+See `macos/QuackBoxNative/README.md` for details.
 
 ---
 
