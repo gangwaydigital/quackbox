@@ -2,9 +2,8 @@ import SwiftUI
 
 struct RootSplitView: View {
     @EnvironmentObject private var state: MailAppState
-
     private var isNativeMailSection: Bool {
-        state.selectedSection == .emails || state.selectedSection == .threads
+        state.selectedSection == .emails
     }
 
     var body: some View {
@@ -24,7 +23,11 @@ struct RootSplitView: View {
                     SidebarView()
                         .navigationSplitViewColumnWidth(min: 200, ideal: state.sidebarColumnWidth, max: 420)
                 } detail: {
-                    WebModuleView(baseURLString: state.webBaseURLString, path: state.selectedSection.webPath)
+                    WebModuleView(
+                        baseURLString: state.webBaseURLString,
+                        path: state.selectedSection.webPath,
+                        reloadToken: state.webReloadToken
+                    )
                 }
             }
         }
@@ -70,7 +73,13 @@ struct RootSplitView: View {
                     }
                 }
 
-                Button { Task { await state.reloadForCurrentMode() } } label: {
+                Button {
+                    if isNativeMailSection {
+                        Task { await state.reloadForCurrentMode() }
+                    } else {
+                        state.reloadWebModule()
+                    }
+                } label: {
                     Label("Refresh", systemImage: "arrow.clockwise")
                 }
                 .keyboardShortcut("r", modifiers: [.command])
@@ -113,58 +122,58 @@ private struct SidebarView: View {
             }
 
             if state.selectedSection == .emails {
-                Section("Accounts") {
-                    Picker("Active Account", selection: Binding(
-                        get: { state.selectedAccountID },
-                        set: { state.selectedAccountID = $0 }
-                    )) {
-                        Text("None").tag(Optional<Int>.none)
-                        ForEach(state.accounts) { account in
-                            Text(account.emailAddress).tag(Optional(account.id))
-                        }
+            Section("Accounts") {
+                Picker("Active Account", selection: Binding(
+                    get: { state.selectedAccountID },
+                    set: { state.selectedAccountID = $0 }
+                )) {
+                    Text("None").tag(Optional<Int>.none)
+                    ForEach(state.accounts) { account in
+                        Text(account.emailAddress).tag(Optional(account.id))
                     }
-                    .pickerStyle(.menu)
                 }
+                .pickerStyle(.menu)
+            }
 
-                Section("Favorites") {
-                    ForEach([SystemMailbox.inbox, .sent, .drafts, .archive, .trash, .all], id: \.self) { mailbox in
-                        Button {
-                            state.selectSystemMailbox(mailbox)
-                        } label: {
-                            HStack {
-                                Label(mailbox.rawValue, systemImage: mailbox.icon)
-                                Spacer()
-                                let unread = state.unreadCount(for: mailbox)
-                                if unread > 0 {
-                                    Text("\(unread)")
-                                        .font(.caption2)
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 2)
-                                        .background(Capsule().fill(Color.blue.opacity(0.18)))
-                                }
+            Section("Favorites") {
+                ForEach([SystemMailbox.inbox, .sent, .drafts, .archive, .trash, .all], id: \.self) { mailbox in
+                    Button {
+                        state.selectSystemMailbox(mailbox)
+                    } label: {
+                        HStack {
+                            Label(mailbox.rawValue, systemImage: mailbox.icon)
+                            Spacer()
+                            let unread = state.unreadCount(for: mailbox)
+                            if unread > 0 {
+                                Text("\(unread)")
+                                    .font(.caption2)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Capsule().fill(Color.blue.opacity(0.18)))
                             }
                         }
-                        .buttonStyle(.plain)
-                        .font(state.selectedSystemMailbox == mailbox ? .headline : .body)
                     }
+                    .buttonStyle(.plain)
+                    .font(state.selectedSystemMailbox == mailbox ? .headline : .body)
                 }
+            }
 
-                Section("Folders") {
-                    ForEach(state.mailboxes) { mailbox in
-                        Button {
-                            state.selectCustomMailbox(mailbox.mboxSource)
-                        } label: {
-                            HStack {
-                                Label(mailbox.mboxSource, systemImage: "folder")
-                                Spacer()
-                                Text("\(mailbox.count)")
-                                    .foregroundStyle(.secondary)
-                            }
+            Section("Folders") {
+                ForEach(state.mailboxes) { mailbox in
+                    Button {
+                        state.selectCustomMailbox(mailbox.mboxSource)
+                    } label: {
+                        HStack {
+                            Label(mailbox.mboxSource, systemImage: "folder")
+                            Spacer()
+                            Text("\(mailbox.count)")
+                                .foregroundStyle(.secondary)
                         }
-                        .buttonStyle(.plain)
-                        .font(state.selectedMailbox == mailbox.mboxSource && state.selectedSystemMailbox == .custom ? .headline : .body)
                     }
+                    .buttonStyle(.plain)
+                    .font(state.selectedMailbox == mailbox.mboxSource && state.selectedSystemMailbox == .custom ? .headline : .body)
                 }
+            }
             }
         }
         .listStyle(.sidebar)
@@ -189,7 +198,7 @@ private struct ContentListView: View {
             .background(.bar)
 
             Group {
-                if state.selectedSection == .emails {
+                if state.mode == .emails {
                     if state.showThreadedList {
                         ThreadedEmailList()
                     } else {
@@ -209,7 +218,7 @@ private struct ContentListView: View {
     }
 
     private var headerTitle: String {
-        if state.selectedSection == .threads { return "Threads" }
+        if state.mode == .threads { return "Threads" }
         if state.selectedSystemMailbox == .custom {
             return state.selectedMailbox ?? "Mailbox"
         }
@@ -217,7 +226,7 @@ private struct ContentListView: View {
     }
 
     private var countValue: Int {
-        if state.selectedSection == .emails { return state.emails.count }
+        if state.mode == .emails { return state.emails.count }
         return state.filteredThreads.count
     }
 }
@@ -443,7 +452,7 @@ private struct DetailPaneView: View {
 
     var body: some View {
         Group {
-            if state.selectedSection == .emails {
+            if state.mode == .emails {
                 EmailDetailView(detail: state.selectedEmailDetail)
             } else {
                 ThreadDetailView(detail: state.selectedThreadDetail)

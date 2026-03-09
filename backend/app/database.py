@@ -32,6 +32,18 @@ def init_db(db_path: Path = DB_PATH):
             date_timestamp REAL, body_text TEXT, body_html TEXT, headers TEXT,
             mbox_source TEXT, thread_id TEXT, has_attachments BOOLEAN DEFAULT 0,
             attachment_names TEXT, created_at TEXT DEFAULT (datetime('now')))""")
+        try:
+            conn.execute("ALTER TABLE emails ADD COLUMN is_read BOOLEAN DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            conn.execute("ALTER TABLE emails ADD COLUMN is_junk BOOLEAN DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            conn.execute("ALTER TABLE emails ADD COLUMN is_archived BOOLEAN DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass
         conn.execute("CREATE INDEX IF NOT EXISTS idx_sender_email ON emails(sender_email)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_date_timestamp ON emails(date_timestamp DESC)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_date_sent ON emails(date_sent)")
@@ -265,6 +277,46 @@ def init_db(db_path: Path = DB_PATH):
             )
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_mail_sync_runs_account ON mail_sync_runs(account_id, started_at DESC)")
+
+        # -- Server-side mail rules used during account sync --
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS mail_rules (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                account_id INTEGER REFERENCES mail_accounts(id) ON DELETE CASCADE,
+                enabled BOOLEAN DEFAULT 1,
+                name TEXT NOT NULL,
+                field TEXT NOT NULL,
+                contains TEXT NOT NULL,
+                action TEXT NOT NULL,
+                continue_evaluating BOOLEAN DEFAULT 0,
+                created_at TEXT DEFAULT (datetime('now')),
+                updated_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_mail_rules_account ON mail_rules(account_id, enabled)")
+
+        # -- Outbox queue for offline send + retries --
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS mail_outbox (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                account_id INTEGER NOT NULL REFERENCES mail_accounts(id) ON DELETE CASCADE,
+                to_json TEXT NOT NULL,
+                cc_json TEXT NOT NULL DEFAULT '[]',
+                bcc_json TEXT NOT NULL DEFAULT '[]',
+                subject TEXT,
+                body_text TEXT,
+                body_html TEXT,
+                status TEXT NOT NULL DEFAULT 'pending',
+                attempt_count INTEGER NOT NULL DEFAULT 0,
+                next_attempt_at TEXT DEFAULT (datetime('now')),
+                last_error TEXT,
+                created_at TEXT DEFAULT (datetime('now')),
+                updated_at TEXT DEFAULT (datetime('now')),
+                sent_at TEXT
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_mail_outbox_status_next ON mail_outbox(status, next_attempt_at)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_mail_outbox_account ON mail_outbox(account_id, created_at DESC)")
 
     print(f"✅ Database initialized at {db_path}")
 

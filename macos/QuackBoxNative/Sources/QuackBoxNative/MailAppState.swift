@@ -92,6 +92,7 @@ final class MailAppState: ObservableObject {
     @Published var searchText: String = ""
     @Published var serverURLString: String
     @Published var webBaseURLString: String
+    @Published var webReloadToken: Int = 0
 
     @Published var stats: StatsResponse?
     @Published var mailboxes: [MailboxItem] = []
@@ -140,8 +141,14 @@ final class MailAppState: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var composeDraft: ComposeDraft?
+    @Published var lastAutoSyncAt: Date?
+    @Published var lastAutoSyncSummary: String = "Not synced yet"
+    @Published var outboxItems: [OutboxItem] = []
 
     private var searchTask: Task<Void, Never>?
+    private var autoSyncTask: Task<Void, Never>?
+    private var isAppActive = true
+    private var autoSyncInFlight = false
     private var archivedEmailIDs = Set<Int>()
     private var seenEmailIDs = Set<Int>()
     private var unreadEmailIDs = Set<Int>()
@@ -153,6 +160,7 @@ final class MailAppState: ObservableObject {
     init() {
         self.serverURLString = UserDefaults.standard.string(forKey: Self.serverURLKey) ?? Self.defaultURLString
         self.webBaseURLString = UserDefaults.standard.string(forKey: Self.webBaseURLKey) ?? Self.defaultWebURLString
+        normalizeLegacyWebURLIfNeeded()
         self.preferences = Self.loadPreferences()
         if preferences.defaultSignatureID == nil {
             self.preferences.defaultSignatureID = preferences.signatures.first?.id
@@ -163,10 +171,20 @@ final class MailAppState: ObservableObject {
     }
 
     func loadInitialData() async {
+        do {
+            try await BackendRuntime.shared.ensureRunning(baseURL: apiBaseURL)
+            await autoFixWebBaseURLIfNeeded()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
         if preferences.allowNotifications {
             await NotificationService.shared.requestAuthorizationIfNeeded()
         }
         await refreshAll()
+        await syncRulesToServer()
+        if preferences.autoSyncOnLaunch {
+            await performAutoSyncPass(reason: "Launch")
+        }
     }
 
     func refreshAll() async {
@@ -189,6 +207,11 @@ final class MailAppState: ObservableObject {
             } catch {
                 // Keep mail UX available even if account endpoint has bad payloads.
                 accounts = []
+            }
+            do {
+                outboxItems = try await api.fetchOutbox(limit: 200)
+            } catch {
+                outboxItems = []
             }
 
             let emailPage = try await emailsCall
@@ -213,6 +236,7 @@ final class MailAppState: ObservableObject {
 
             detectAndNotifyNewMessages(from: emailPage.items)
             persistState()
+            restartAutoSyncLoop()
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
@@ -237,11 +261,15 @@ final class MailAppState: ObservableObject {
     func setWebBaseURL(_ input: String) {
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard URL(string: trimmed) != nil else {
-            errorMessage = "Invalid web URL. Use something like http://127.0.0.1:5173"
+            errorMessage = "Invalid web URL. Use something like http://127.0.0.1:8000"
             return
         }
         webBaseURLString = trimmed
         UserDefaults.standard.set(trimmed, forKey: Self.webBaseURLKey)
+    }
+
+    func reloadWebModule() {
+        webReloadToken &+= 1
     }
 
     func setPreferences(_ updated: AppPreferences) {
@@ -252,17 +280,45 @@ final class MailAppState: ObservableObject {
         }
         showThreadedList = updated.useThreadedViewByDefault
         applyEmailVisibility(allFetchedEmails)
+        restartAutoSyncLoop()
+        Task { await syncRulesToServer() }
+    }
+
+    func setAppIsActive(_ active: Bool) {
+        isAppActive = active
+        restartAutoSyncLoop()
+    }
+
+    func autoSyncFoldersText(for accountID: Int?) -> String {
+        guard let accountID else { return preferences.autoSyncDefaultFoldersRaw }
+        return preferences.autoSyncFolderOverridesByAccount[String(accountID)] ?? preferences.autoSyncDefaultFoldersRaw
+    }
+
+    func setAutoSyncFoldersText(_ raw: String, for accountID: Int?) {
+        var updated = preferences
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let accountID {
+            if trimmed.isEmpty {
+                updated.autoSyncFolderOverridesByAccount.removeValue(forKey: String(accountID))
+            } else {
+                updated.autoSyncFolderOverridesByAccount[String(accountID)] = trimmed
+            }
+        } else {
+            updated.autoSyncDefaultFoldersRaw = trimmed.isEmpty ? "INBOX" : trimmed
+        }
+        setPreferences(updated)
     }
 
     func selectSection(_ section: AppSection) {
-        selectedSection = section
         switch section {
         case .emails:
+            selectedSection = .emails
             mode = .emails
         case .threads:
+            selectedSection = .threads
             mode = .threads
         default:
-            break
+            selectedSection = section
         }
     }
 
@@ -409,7 +465,14 @@ final class MailAppState: ObservableObject {
         defer { isLoading = false }
 
         do {
-            _ = try await api.syncAccount(accountID: accountID, folder: "INBOX", limit: 250)
+            let folders = autoSyncFolders(for: accountID)
+            for folder in folders {
+                _ = try await api.syncAccount(
+                    accountID: accountID,
+                    folder: folder,
+                    limit: min(1000, max(1, preferences.autoSyncFetchLimit))
+                )
+            }
             await refreshAll()
             errorMessage = nil
         } catch {
@@ -518,11 +581,44 @@ final class MailAppState: ObservableObject {
                     bcc: bcc,
                     subject: draft.subject,
                     bodyText: draft.body,
-                    bodyHTML: preferences.composeInRichText ? draft.bodyHTML : nil
+                    bodyHTML: preferences.composeInRichText ? draft.bodyHTML : nil,
+                    queueOnFailure: true
                 )
             )
             composeDraft = nil
+            do {
+                outboxItems = try await api.fetchOutbox(limit: 200)
+            } catch {
+                outboxItems = []
+            }
             errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func flushOutboxQueue() async {
+        do {
+            _ = try await api.flushOutbox(maxItems: 100)
+            outboxItems = try await api.fetchOutbox(limit: 200)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func retryOutboxItem(_ itemID: Int) async {
+        do {
+            _ = try await api.retryOutboxItem(id: itemID)
+            outboxItems = try await api.fetchOutbox(limit: 200)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func deleteOutboxItem(_ itemID: Int) async {
+        do {
+            try await api.deleteOutboxItem(id: itemID)
+            outboxItems.removeAll { $0.id == itemID }
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -909,7 +1005,11 @@ final class MailAppState: ObservableObject {
     }
 
     private var api: QuackBoxAPI {
-        QuackBoxAPI(baseURL: URL(string: serverURLString) ?? URL(string: Self.defaultURLString)!)
+        QuackBoxAPI(baseURL: apiBaseURL)
+    }
+
+    private var apiBaseURL: URL {
+        URL(string: serverURLString) ?? URL(string: Self.defaultURLString)!
     }
 
     private func appendSignature(to draft: ComposeDraft, isReply: Bool) -> ComposeDraft {
@@ -1045,8 +1145,121 @@ final class MailAppState: ObservableObject {
             .filter { !$0.isEmpty }
     }
 
+    private func autoSyncFolders(for accountID: Int) -> [String] {
+        let raw = preferences.autoSyncFolderOverridesByAccount[String(accountID)] ?? preferences.autoSyncDefaultFoldersRaw
+        let folders = raw
+            .split(whereSeparator: { $0 == "," || $0 == ";" || $0 == "\n" })
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        return folders.isEmpty ? ["INBOX"] : folders
+    }
+
+    private func restartAutoSyncLoop() {
+        autoSyncTask?.cancel()
+        guard preferences.autoSyncEnabled, isAppActive else { return }
+
+        let intervalMinutes = max(1, Int(preferences.autoSyncIntervalMinutes.rounded()))
+        let intervalNanos = UInt64(intervalMinutes) * 60 * 1_000_000_000
+        autoSyncTask = Task { [weak self] in
+            guard let self else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: intervalNanos)
+                if Task.isCancelled { break }
+                await self.performAutoSyncPass(reason: "Scheduled")
+            }
+        }
+    }
+
+    private func syncRulesToServer() async {
+        let payload = preferences.rules.map { rule in
+            ServerRuleSyncItem(
+                enabled: rule.enabled,
+                name: rule.name,
+                field: rule.field.rawValue,
+                contains: rule.contains,
+                action: rule.action.rawValue,
+                continueEvaluating: rule.continueEvaluating
+            )
+        }
+        do {
+            try await api.replaceServerRules(payload)
+        } catch {
+            // Local rule behavior remains active even if server sync fails.
+        }
+    }
+
+    private func performAutoSyncPass(reason: String) async {
+        guard preferences.autoSyncEnabled, isAppActive else { return }
+        guard !autoSyncInFlight else { return }
+        guard !accounts.isEmpty else { return }
+
+        autoSyncInFlight = true
+        defer { autoSyncInFlight = false }
+
+        let syncableAccounts = accounts.filter(\.enabled)
+        guard !syncableAccounts.isEmpty else { return }
+
+        var accountCount = 0
+        var folderCount = 0
+        var insertedTotal = 0
+        let limit = min(1000, max(1, preferences.autoSyncFetchLimit))
+
+        do {
+            for account in syncableAccounts {
+                accountCount += 1
+                for folder in autoSyncFolders(for: account.id) {
+                    folderCount += 1
+                    let response = try await api.syncAccount(accountID: account.id, folder: folder, limit: limit)
+                    insertedTotal += response.insertedCount
+                }
+            }
+
+            lastAutoSyncAt = Date()
+            lastAutoSyncSummary = "\(reason): \(insertedTotal) new messages across \(folderCount) folders (\(accountCount) accounts)"
+            await refreshAll()
+        } catch {
+            lastAutoSyncAt = Date()
+            lastAutoSyncSummary = "\(reason) failed: \(error.localizedDescription)"
+            errorMessage = error.localizedDescription
+        }
+    }
+
     private func savePreferences() {
         Self.savePreferences(preferences)
+    }
+
+    private func normalizeLegacyWebURLIfNeeded() {
+        guard let url = URL(string: webBaseURLString),
+              let host = url.host?.lowercased(),
+              let port = url.port else { return }
+        if (host == "127.0.0.1" || host == "localhost") && port == 5173 {
+            webBaseURLString = serverURLString
+            UserDefaults.standard.set(webBaseURLString, forKey: Self.webBaseURLKey)
+        }
+    }
+
+    private func autoFixWebBaseURLIfNeeded() async {
+        guard !(await isBaseReachable(webBaseURLString)) else { return }
+        guard await isBaseReachable(serverURLString) else { return }
+        webBaseURLString = serverURLString
+        UserDefaults.standard.set(webBaseURLString, forKey: Self.webBaseURLKey)
+        webReloadToken &+= 1
+    }
+
+    private func isBaseReachable(_ base: String) async -> Bool {
+        guard var comps = URLComponents(string: base) else { return false }
+        comps.path = "/api/stats"
+        guard let url = comps.url else { return false }
+
+        var req = URLRequest(url: url)
+        req.timeoutInterval = 1.3
+        do {
+            let (_, response) = try await URLSession.shared.data(for: req)
+            guard let http = response as? HTTPURLResponse else { return false }
+            return (200 ..< 500).contains(http.statusCode)
+        } catch {
+            return false
+        }
     }
 
     private static func loadPreferences() -> AppPreferences {
@@ -1064,7 +1277,7 @@ final class MailAppState: ObservableObject {
 
     private static let defaultURLString = "http://127.0.0.1:8000"
     private static let serverURLKey = "quackbox.macos.server_url"
-    private static let defaultWebURLString = "http://127.0.0.1:5173"
+    private static let defaultWebURLString = "http://127.0.0.1:8000"
     private static let webBaseURLKey = "quackbox.macos.web_url"
     private static let preferencesKey = "quackbox.macos.preferences"
 }

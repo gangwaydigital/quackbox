@@ -62,6 +62,16 @@ class SendEmailRequest(BaseModel):
     subject: str = ""
     body_text: str = ""
     body_html: Optional[str] = None
+    queue_on_failure: bool = True
+
+
+class RuleSyncItem(BaseModel):
+    enabled: bool = True
+    name: str
+    field: str
+    contains: str
+    action: str
+    continue_evaluating: bool = False
 
 
 @router.get("")
@@ -128,6 +138,7 @@ async def send_from_account(account_id: int, payload: SendEmailRequest):
             subject=payload.subject,
             body_text=payload.body_text,
             body_html=payload.body_html,
+            queue_on_failure=payload.queue_on_failure,
         )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -135,3 +146,47 @@ async def send_from_account(account_id: int, payload: SendEmailRequest):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.get("/rules")
+async def list_rules(account_id: Optional[int] = Query(None)):
+    return {"items": mail_accounts.list_rules(account_id=account_id)}
+
+
+@router.post("/rules/replace")
+async def replace_rules(payload: list[RuleSyncItem]):
+    try:
+        return mail_accounts.replace_global_rules([r.model_dump() for r in payload])
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.get("/outbox")
+async def list_outbox(status: Optional[str] = Query(None), limit: int = Query(200, ge=1, le=1000)):
+    return {"items": mail_accounts.list_outbox(status=status, limit=limit)}
+
+
+@router.post("/outbox/flush")
+async def flush_outbox(max_items: int = Query(25, ge=1, le=500)):
+    try:
+        return mail_accounts.process_outbox(max_items=max_items)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.post("/outbox/{outbox_id}/retry")
+async def retry_outbox(outbox_id: int):
+    try:
+        return mail_accounts.retry_outbox_item(outbox_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.delete("/outbox/{outbox_id}")
+async def delete_outbox(outbox_id: int):
+    ok = mail_accounts.delete_outbox_item(outbox_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Outbox item not found")
+    return {"ok": True}

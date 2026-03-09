@@ -47,6 +47,7 @@ struct SettingsView: View {
     @State private var serverURLInput: String = ""
     @State private var webURLInput: String = ""
     @State private var accountDraft = SettingsView.emptyAccountForm()
+    @State private var accountFolderOverrideRaw: String = ""
 
     @State private var prefsDraft = AppPreferences()
 
@@ -129,6 +130,7 @@ struct SettingsView: View {
             if selectedAccountID == nil {
                 selectedAccountID = state.selectedAccountID ?? state.accounts.first?.id
             }
+            accountFolderOverrideRaw = state.autoSyncFoldersText(for: selectedAccountID)
             selectedSignatureID = prefsDraft.defaultSignatureID ?? prefsDraft.signatures.first?.id
             loadDraftFromSelection()
             loadSignatureEditor()
@@ -136,6 +138,7 @@ struct SettingsView: View {
         }
         .onChange(of: selectedAccountID) { _, _ in
             loadDraftFromSelection()
+            accountFolderOverrideRaw = state.autoSyncFoldersText(for: selectedAccountID)
         }
         .onChange(of: selectedSignatureID) { _, _ in
             loadSignatureEditor()
@@ -258,6 +261,106 @@ struct SettingsView: View {
             Toggle("Show preview snippets", isOn: prefBinding(\.showMessagePreview))
             Toggle("Compact list density", isOn: prefBinding(\.compactListDensity))
             Toggle("Hide junk from Inbox", isOn: prefBinding(\.hideJunkFromInbox))
+
+            Divider()
+
+            Toggle("Automatically sync mail", isOn: prefBinding(\.autoSyncEnabled))
+            Toggle("Sync automatically at launch", isOn: prefBinding(\.autoSyncOnLaunch))
+            HStack {
+                Text("Sync every")
+                Stepper(value: prefBinding(\.autoSyncIntervalMinutes), in: 1 ... 60, step: 1) {
+                    Text("\(Int(prefsDraft.autoSyncIntervalMinutes)) minutes")
+                }
+            }
+            HStack {
+                Text("Fetch limit per folder")
+                Stepper(value: prefBinding(\.autoSyncFetchLimit), in: 50 ... 1000, step: 50) {
+                    Text("\(prefsDraft.autoSyncFetchLimit)")
+                }
+            }
+            TextField("Default sync folders (comma separated)", text: Binding(
+                get: { prefsDraft.autoSyncDefaultFoldersRaw },
+                set: {
+                    prefsDraft.autoSyncDefaultFoldersRaw = $0
+                    applyPrefs()
+                }
+            ))
+            .textFieldStyle(.roundedBorder)
+
+            TextField("Selected account folders (override)", text: $accountFolderOverrideRaw)
+                .textFieldStyle(.roundedBorder)
+
+            HStack {
+                Button("Apply Account Override") {
+                    state.setAutoSyncFoldersText(accountFolderOverrideRaw, for: selectedAccountID)
+                    prefsDraft = state.preferences
+                }
+                .disabled(selectedAccountID == nil)
+
+                Button("Clear Override") {
+                    guard selectedAccountID != nil else { return }
+                    state.setAutoSyncFoldersText("", for: selectedAccountID)
+                    prefsDraft = state.preferences
+                    accountFolderOverrideRaw = state.autoSyncFoldersText(for: selectedAccountID)
+                }
+                .disabled(selectedAccountID == nil)
+
+                Spacer()
+                Button("Sync Now") {
+                    Task { await state.syncSelectedAccount() }
+                }
+                .disabled(selectedAccountID == nil)
+            }
+
+            if let last = state.lastAutoSyncAt {
+                Text("Last auto sync: \(last.formatted(date: .abbreviated, time: .shortened))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Text(state.lastAutoSyncSummary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Divider()
+
+            HStack {
+                Text("Outbox Queue")
+                    .font(.headline)
+                Spacer()
+                Text("\(state.outboxItems.filter { $0.status != "sent" }.count) pending")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            HStack {
+                Button("Flush Outbox") {
+                    Task { await state.flushOutboxQueue() }
+                }
+                .disabled(state.outboxItems.isEmpty)
+                Spacer()
+            }
+
+            if !state.outboxItems.isEmpty {
+                List(state.outboxItems.prefix(8)) { item in
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(item.subject ?? "(No Subject)")
+                                .lineLimit(1)
+                            Text("Status: \(item.status) • Attempts: \(item.attemptCount)")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button("Retry") {
+                            Task { await state.retryOutboxItem(item.id) }
+                        }
+                        .disabled(item.status == "sent")
+                        Button("Delete") {
+                            Task { await state.deleteOutboxItem(item.id) }
+                        }
+                    }
+                }
+                .frame(minHeight: 120, maxHeight: 180)
+            }
         }
     }
 
@@ -354,7 +457,7 @@ struct SettingsView: View {
 
             GroupBox("Web Modules") {
                 VStack(alignment: .leading, spacing: 10) {
-                    TextField("http://127.0.0.1:5173", text: $webURLInput)
+                    TextField("http://127.0.0.1:8000", text: $webURLInput)
                         .textFieldStyle(.roundedBorder)
                     HStack {
                         Button("Apply Web URL") {

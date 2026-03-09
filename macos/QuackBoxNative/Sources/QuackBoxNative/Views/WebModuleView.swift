@@ -4,6 +4,15 @@ import WebKit
 struct WebModuleView: NSViewRepresentable {
     let baseURLString: String
     let path: String
+    let reloadToken: Int
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    final class Coordinator {
+        var lastReloadToken: Int = 0
+    }
 
     func makeNSView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
@@ -61,6 +70,13 @@ struct WebModuleView: NSViewRepresentable {
 
         if nsView.url != url {
             nsView.load(URLRequest(url: url))
+            context.coordinator.lastReloadToken = reloadToken
+            return
+        }
+
+        if context.coordinator.lastReloadToken != reloadToken {
+            context.coordinator.lastReloadToken = reloadToken
+            nsView.reload()
         }
     }
 }

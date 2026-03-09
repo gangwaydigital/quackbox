@@ -19,11 +19,11 @@ Native SwiftUI macOS client for QuackBox.
 
 ## Run
 
-1. Start QuackBox backend (default `http://127.0.0.1:8000`):
+1. Install backend dependencies once:
 
 ```bash
-cd /Users/marc/Desktop/003-AI/07-home_project/git/quackbox
-docker compose up backend
+cd /Users/marc/Desktop/003-AI/07-home_project/git/quackbox/backend
+python3 -m pip install -r requirements.txt
 ```
 
 2. Open the Swift package in Xcode:
@@ -33,8 +33,10 @@ docker compose up backend
 - Choose the `QuackBoxNative` run target
 - Run
 
+The app auto-starts the local backend on `http://127.0.0.1:8000` when launching.
+
 ## Notes
 
-- The app is optimized for macOS 14+.
+- The app is optimized for macOS 26+.
 - The native client uses your existing FastAPI API; no schema changes required.
 - IMAP sync currently pulls recent messages from `INBOX` and ingests them into the existing `emails` table.

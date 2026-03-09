@@ -2,7 +2,7 @@
 
 **Your inbox, quacked open.**
 
-QuackBox is a self-hosted email intelligence platform that transforms `.mbox` and Apple Mail archives into a searchable, analyzable knowledge base. Explore decades of email with AI-powered search, conversation threading, contact profiling, and interactive visualizations — all running locally in Docker.
+QuackBox is a self-hosted email intelligence platform that transforms `.mbox` and Apple Mail archives into a searchable, analyzable knowledge base. Explore decades of email with AI-powered search, conversation threading, contact profiling, and interactive visualizations — all running locally on your Mac.
 
 ![Version](https://img.shields.io/badge/version-4.0.0-blue) ![Stack](https://img.shields.io/badge/stack-Python%20%7C%20React%20%7C%20SQLite-green) ![License](https://img.shields.io/badge/license-MIT-gray)
 
@@ -57,7 +57,8 @@ QuackBox is a self-hosted email intelligence platform that transforms `.mbox` an
 
 ### Prerequisites
 
-- **Docker** & **Docker Compose**
+- **Python 3.12+**
+- **Node.js 18+** (for web module development)
 - **Ollama** (optional — for AI features like chat, topics, summarization, semantic search)
 
 ### 1. Clone & point to your data
@@ -91,10 +92,12 @@ ollama pull nomic-embed-text    # for semantic search & topics
 ollama pull llama3.1:8b          # for chat & summarization
 ```
 
-### 3. Launch
+### 3. Launch (no Docker)
 
 ```bash
-docker compose up --build
+cd backend
+python3 -m pip install -r requirements.txt
+python3 run.py
 ```
 
 Open **http://localhost:5173** — the setup wizard will detect your data and guide you through import.
@@ -113,13 +116,13 @@ Open **http://localhost:5173** — the setup wizard will detect your data and gu
 
 QuackBox supports separate endpoints for chat and embedding, each configurable as either **Ollama** (default) or any **OpenAI-compatible** API.
 
-Edit `docker-compose.yml` environment variables:
+Edit backend environment variables via your shell or `.env`:
 
 ### Chat LLM (Q&A, summarization)
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `CHAT_API_URL` | `http://host.docker.internal:11434` | API base URL |
+| `CHAT_API_URL` | `http://127.0.0.1:11434` | API base URL |
 | `CHAT_API_KEY` | *(empty)* | API key (blank for Ollama) |
 | `CHAT_MODEL` | `llama3.1:8b` | Model name |
 | `CHAT_API_TYPE` | `ollama` | `ollama` or `openai` |
@@ -128,7 +131,7 @@ Edit `docker-compose.yml` environment variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `EMBED_API_URL` | `http://host.docker.internal:11434` | API base URL |
+| `EMBED_API_URL` | `http://127.0.0.1:11434` | API base URL |
 | `EMBED_API_KEY` | *(empty)* | API key (blank for Ollama) |
 | `EMBED_MODEL` | `nomic-embed-text` | Model name |
 | `EMBED_API_TYPE` | `ollama` | `ollama` or `openai` |
@@ -142,7 +145,7 @@ environment:
   - CHAT_API_KEY=sk-your-key-here
   - CHAT_MODEL=gpt-4o-mini
   - CHAT_API_TYPE=openai
-  - EMBED_API_URL=http://host.docker.internal:11434
+  - EMBED_API_URL=http://127.0.0.1:11434
   - EMBED_MODEL=nomic-embed-text
   - EMBED_API_TYPE=ollama
 ```
@@ -172,17 +175,17 @@ quackbox/
 │   │   ├── services/      # Business logic
 │   │   ├── database.py    # SQLite + FTS5
 │   │   └── config.py      # Environment-based config
-│   ├── Dockerfile
+│   ├── run.py
 │   └── requirements.txt
 ├── frontend/              # React 18 / Vite
 │   ├── src/
 │   │   ├── components/    # 21 React components
 │   │   ├── hooks/         # Keyboard shortcuts
 │   │   └── api/           # API client
-│   ├── Dockerfile
+│   ├── package.json
 │   └── package.json
 ├── data/                  # Your email files (gitignored)
-├── docker-compose.yml
+├── macos/
 └── .gitignore
 ```
 
@@ -243,17 +246,18 @@ GET  /api/export/thread/{id}/html  # Printable thread export
 ## Development
 
 ```bash
-# Backend only (hot-reload via volume mount)
-docker compose up backend
+# Backend API
+cd backend
+python3 -m pip install -r requirements.txt
+python3 run.py
 
-# Frontend only (Vite HMR)
-cd frontend && npm run dev
-
-# View logs
-docker compose logs -f backend
+# Frontend web module (optional)
+cd ../frontend
+npm install
+npm run dev
 ```
 
-The database persists in a Docker volume (`db-data`). Email data lives in `data/` which is gitignored.
+The database persists locally at `backend/quackbox.db`. Email data lives in `data/` which is gitignored.
 
 ---
 

@@ -2,7 +2,7 @@
 QuackBox — Application configuration.
 
 Supports separate OpenAI-compatible endpoints for chat and embedding.
-Set via environment variables or docker-compose.yml.
+Set via environment variables or a local `.env`.
 """
 
 import os

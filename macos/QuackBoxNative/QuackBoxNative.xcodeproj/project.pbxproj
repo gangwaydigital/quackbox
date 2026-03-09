@@ -17,6 +17,7 @@
 		8976A1127358F9F3CA096824 /* AppCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = 556923AAE981322FDFF416F3 /* AppCommands.swift */; };
 		900683FD8C17877D09698787 /* RichTextEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A605F692E4BD8121D0F4F3BF /* RichTextEditor.swift */; };
 		928B4252C8ADFD14A0C128DC /* QuackBoxAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = B67E4B98FC17E3E0E79A2DE2 /* QuackBoxAPI.swift */; };
+		A2A629491873B4E02D82911A /* BackendRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4194AFA34E84BECAEB58EE85 /* BackendRuntime.swift */; };
 		A9776700BE73A7AE4BAA2962 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = E46A4BFCB8F499C33C66547C /* Models.swift */; };
 		D4ED77C3735F3B6C57DC0AD1 /* ComposeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4C80BB90D129B3A694D7CDD /* ComposeView.swift */; };
 		DA3695F524D69D16B16F346B /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA659EA13124EC4F7D95BADC /* SettingsView.swift */; };
@@ -29,6 +30,7 @@
 		09F2F4873C1F650D53CF68CB /* ThreadDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadDetailView.swift; sourceTree = "<group>"; };
 		1B0D227A8EECC380B67B60FA /* QuackBoxNative.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = QuackBoxNative.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		28E2AB8822776A749F7477F2 /* RootSplitView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootSplitView.swift; sourceTree = "<group>"; };
+		4194AFA34E84BECAEB58EE85 /* BackendRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendRuntime.swift; sourceTree = "<group>"; };
 		556923AAE981322FDFF416F3 /* AppCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCommands.swift; sourceTree = "<group>"; };
 		856A933F17EC9B88C528490C /* QuackBoxNativeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuackBoxNativeApp.swift; sourceTree = "<group>"; };
 		9D0721CD5DB75C687F6FCBB4 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
@@ -56,6 +58,7 @@
 			isa = PBXGroup;
 			children = (
 				556923AAE981322FDFF416F3 /* AppCommands.swift */,
+				4194AFA34E84BECAEB58EE85 /* BackendRuntime.swift */,
 				C96027E6FF62F6EDAECFB055 /* LocalStore.swift */,
 				0729717491D97E8339061A68 /* MailAppState.swift */,
 				E46A4BFCB8F499C33C66547C /* Models.swift */,
@@ -172,6 +175,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				8976A1127358F9F3CA096824 /* AppCommands.swift in Sources */,
+				A2A629491873B4E02D82911A /* BackendRuntime.swift in Sources */,
 				D4ED77C3735F3B6C57DC0AD1 /* ComposeView.swift in Sources */,
 				2EC373687FE39035A1B4212E /* EmailDetailView.swift in Sources */,
 				3AE92968BB258820E62438C0 /* LocalStore.swift in Sources */,
@@ -259,7 +263,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 26D104;
+				CURRENT_PROJECT_VERSION = 26D110;
 				ENABLE_HARDENED_RUNTIME = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "QuackBox Email";
@@ -340,7 +344,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 26D104;
+				CURRENT_PROJECT_VERSION = 26D110;
 				ENABLE_HARDENED_RUNTIME = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "QuackBox Email";

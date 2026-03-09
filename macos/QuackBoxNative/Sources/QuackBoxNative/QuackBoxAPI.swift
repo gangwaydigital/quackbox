@@ -29,8 +29,15 @@ struct QuackBoxAPI {
     }
 
     func fetchMailboxes() async throws -> [MailboxItem] {
-        let payload: WrappedAnalytics<[MailboxItem]> = try await request(path: "/api/analytics/mailboxes")
-        return payload.data
+        if let payload: WrappedAnalytics<[MailboxItem]> = try? await request(path: "/api/analytics/mailboxes") {
+            return payload.data
+        }
+        if let raw: [MailboxItem] = try? await request(path: "/api/analytics/mailboxes") {
+            return raw
+        }
+        struct MailboxEnvelope: Decodable { let items: [MailboxItem] }
+        let payload: MailboxEnvelope = try await request(path: "/api/analytics/mailboxes")
+        return payload.items
     }
 
     func fetchEmails(search: String, mailbox: String?) async throws -> PaginatedEmailsResponse {
@@ -79,8 +86,15 @@ struct QuackBoxAPI {
     }
 
     func fetchAccounts() async throws -> [MailAccount] {
-        let payload: AccountEnvelope = try await request(path: "/api/accounts")
-        return payload.items
+        if let payload: AccountEnvelope = try? await request(path: "/api/accounts") {
+            return payload.items
+        }
+        if let raw: [MailAccount] = try? await request(path: "/api/accounts") {
+            return raw
+        }
+        struct DataEnvelope: Decodable { let data: [MailAccount] }
+        let payload: DataEnvelope = try await request(path: "/api/accounts")
+        return payload.data
     }
 
     func createAccount(_ req: CreateAccountRequest) async throws -> MailAccount {
@@ -105,6 +119,35 @@ struct QuackBoxAPI {
 
     func sendEmail(accountID: Int, request req: SendEmailRequest) async throws -> SendEmailResponse {
         try await request(path: "/api/accounts/\(accountID)/send", method: "POST", body: req)
+    }
+
+    func replaceServerRules(_ rules: [ServerRuleSyncItem]) async throws {
+        struct ReplaceResponse: Decodable { let ok: Bool }
+        _ = try await request(path: "/api/accounts/rules/replace", method: "POST", body: rules) as ReplaceResponse
+    }
+
+    func fetchOutbox(status: String? = nil, limit: Int = 200) async throws -> [OutboxItem] {
+        var query = [URLQueryItem(name: "limit", value: "\(limit)")]
+        if let status, !status.isEmpty {
+            query.append(URLQueryItem(name: "status", value: status))
+        }
+        let payload: OutboxEnvelope = try await request(path: "/api/accounts/outbox", queryItems: query)
+        return payload.items
+    }
+
+    func flushOutbox(maxItems: Int = 25) async throws -> OutboxFlushResponse {
+        try await request(path: "/api/accounts/outbox/flush", queryItems: [
+            URLQueryItem(name: "max_items", value: "\(maxItems)")
+        ], method: "POST")
+    }
+
+    func retryOutboxItem(id: Int) async throws -> OutboxFlushResponse {
+        try await request(path: "/api/accounts/outbox/\(id)/retry", method: "POST")
+    }
+
+    func deleteOutboxItem(id: Int) async throws {
+        struct DeleteResponse: Decodable { let ok: Bool }
+        _ = try await request(path: "/api/accounts/outbox/\(id)", method: "DELETE") as DeleteResponse
     }
 
     func attachmentDownloadURL(emailID: Int, filename: String) -> URL? {
@@ -158,16 +201,38 @@ struct QuackBoxAPI {
         }
 
         do {
-            return try decoder.decode(T.self, from: data)
+            return try decodeWithFallback(T.self, from: data, decoder: decoder)
         } catch {
-            // Fallback for malformed UTF-8/control bytes from legacy email bodies.
-            let lossy = String(decoding: data, as: UTF8.self)
-            if let normalized = lossy.data(using: .utf8),
-               let decoded = try? decoder.decode(T.self, from: normalized) {
-                return decoded
-            }
             throw APIClientError.decoding("\(path): \(error.localizedDescription)")
         }
+    }
+
+    private func decodeWithFallback<T: Decodable>(_ type: T.Type, from data: Data, decoder: JSONDecoder) throws -> T {
+        if let decoded = try? decoder.decode(T.self, from: data) {
+            return decoded
+        }
+
+        // Fallback for malformed UTF-8/control bytes from legacy email bodies.
+        let lossy = String(decoding: data, as: UTF8.self)
+        if let normalized = lossy.data(using: .utf8),
+           let decoded = try? decoder.decode(T.self, from: normalized) {
+            return decoded
+        }
+
+        if let object = try? JSONSerialization.jsonObject(with: data) {
+            if let dict = object as? [String: Any] {
+                for key in ["data", "items", "result"] {
+                    if let nested = dict[key],
+                       JSONSerialization.isValidJSONObject(nested),
+                       let nestedData = try? JSONSerialization.data(withJSONObject: nested),
+                       let decoded = try? decoder.decode(T.self, from: nestedData) {
+                        return decoded
+                    }
+                }
+            }
+        }
+
+        return try decoder.decode(T.self, from: data)
     }
 }
 

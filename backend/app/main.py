@@ -1,7 +1,10 @@
 """QuackBox — FastAPI Application"""
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from pathlib import Path
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from app.database import init_db, get_stats
 from app.logging_config import setup_logging
 from app.routers import emails, topics, ingest, chat, threads, analytics, contacts, export, attachments, bookmarks, settings, deduplication, saved_searches, accounts
@@ -34,8 +37,18 @@ app.include_router(deduplication.router)
 app.include_router(saved_searches.router)
 app.include_router(accounts.router)
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+FRONTEND_DIST = REPO_ROOT / "frontend" / "dist"
+FRONTEND_ASSETS = FRONTEND_DIST / "assets"
+
+if FRONTEND_ASSETS.exists():
+    app.mount("/assets", StaticFiles(directory=str(FRONTEND_ASSETS)), name="frontend-assets")
+
+
 @app.get("/")
 async def root():
+    if (FRONTEND_DIST / "index.html").exists():
+        return FileResponse(str(FRONTEND_DIST / "index.html"))
     return {"app": "QuackBox", "version": APP_VERSION, "docs": "/docs"}
 
 @app.get("/api/stats")
@@ -43,3 +56,17 @@ async def stats():
     s = get_stats()
     s["version"] = APP_VERSION
     return s
+
+
+@app.get("/{full_path:path}")
+async def spa_fallback(full_path: str):
+    if full_path.startswith("api/") or full_path in {"docs", "redoc", "openapi.json"}:
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    if not (FRONTEND_DIST / "index.html").exists():
+        return {"app": "QuackBox", "version": APP_VERSION, "docs": "/docs"}
+
+    candidate = FRONTEND_DIST / full_path
+    if candidate.is_file():
+        return FileResponse(str(candidate))
+    return FileResponse(str(FRONTEND_DIST / "index.html"))

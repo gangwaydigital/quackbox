@@ -353,6 +353,104 @@ def _recipients_header(msg: email.message.Message) -> str:
     return json.dumps(values)
 
 
+def list_rules(account_id: Optional[int] = None) -> list[dict]:
+    with get_db() as conn:
+        if account_id is None:
+            rows = conn.execute(
+                "SELECT * FROM mail_rules ORDER BY account_id ASC, id ASC"
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM mail_rules WHERE account_id IS NULL OR account_id = ? ORDER BY account_id ASC, id ASC",
+                (account_id,),
+            ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def replace_global_rules(rules: list[dict]) -> dict:
+    with get_db() as conn:
+        conn.execute("DELETE FROM mail_rules WHERE account_id IS NULL")
+        for rule in rules:
+            if not rule.get("contains"):
+                continue
+            conn.execute(
+                """
+                INSERT INTO mail_rules (account_id, enabled, name, field, contains, action, continue_evaluating, updated_at)
+                VALUES (NULL, ?, ?, ?, ?, ?, ?, datetime('now'))
+                """,
+                (
+                    1 if rule.get("enabled", True) else 0,
+                    rule.get("name") or "Rule",
+                    rule.get("field") or "subject",
+                    rule.get("contains") or "",
+                    rule.get("action") or "mark_junk",
+                    1 if rule.get("continue_evaluating", False) else 0,
+                ),
+            )
+        count = conn.execute("SELECT COUNT(*) FROM mail_rules WHERE account_id IS NULL").fetchone()[0]
+    return {"ok": True, "count": int(count)}
+
+
+def _normalize_action(value: str) -> str:
+    normalized = (value or "").strip().lower().replace("-", "_")
+    mapping = {
+        "markread": "mark_read",
+        "mark_read": "mark_read",
+        "markunread": "mark_unread",
+        "mark_unread": "mark_unread",
+        "markjunk": "mark_junk",
+        "mark_junk": "mark_junk",
+        "archive": "archive",
+    }
+    return mapping.get(normalized, normalized)
+
+
+def _rule_haystack(field: str, subject: Optional[str], sender_name: Optional[str], sender_email: Optional[str], body_text: Optional[str]) -> str:
+    f = (field or "subject").lower()
+    if f == "sender":
+        return f"{sender_name or ''} {sender_email or ''}".lower()
+    if f == "snippet":
+        return (body_text or "").lower()
+    return (subject or "").lower()
+
+
+def _evaluate_server_rules(account_id: int, subject: Optional[str], sender_name: Optional[str], sender_email: Optional[str], body_text: Optional[str]) -> dict:
+    with get_db() as conn:
+        rows = conn.execute(
+            """
+            SELECT enabled, field, contains, action, continue_evaluating
+            FROM mail_rules
+            WHERE enabled = 1 AND (account_id IS NULL OR account_id = ?)
+            ORDER BY account_id ASC, id ASC
+            """,
+            (account_id,),
+        ).fetchall()
+
+    actions = {"is_read": 0, "is_junk": 0, "is_archived": 0}
+    for row in rows:
+        needle = (row["contains"] or "").strip().lower()
+        if not needle:
+            continue
+        haystack = _rule_haystack(row["field"], subject, sender_name, sender_email, body_text)
+        if needle not in haystack:
+            continue
+
+        action = _normalize_action(row["action"])
+        if action == "archive":
+            actions["is_archived"] = 1
+        elif action == "mark_read":
+            actions["is_read"] = 1
+        elif action == "mark_unread":
+            actions["is_read"] = 0
+        elif action == "mark_junk":
+            actions["is_junk"] = 1
+
+        if not bool(row["continue_evaluating"]):
+            break
+
+    return actions
+
+
 def sync_account(account_id: int, folder_name: str = "INBOX", limit: int = 200) -> dict:
     account = get_account(account_id)
     if not account:
@@ -432,6 +530,17 @@ def sync_account(account_id: int, folder_name: str = "INBOX", limit: int = 200) 
                 attachment_names_json = json.dumps(attachment_names)
                 thread_id = parsed.get("In-Reply-To")
                 source = f"imap:{account.email_address}:{folder}"
+                rule_actions = _evaluate_server_rules(
+                    account_id=account.id,
+                    subject=subject,
+                    sender_name=sender_name,
+                    sender_email=sender_email,
+                    body_text=body_text,
+                )
+                if rule_actions["is_junk"]:
+                    source = f"imap:{account.email_address}:Junk"
+                elif rule_actions["is_archived"]:
+                    source = f"imap:{account.email_address}:Archive"
 
                 try:
                     with get_db() as conn:
@@ -441,7 +550,8 @@ def sync_account(account_id: int, folder_name: str = "INBOX", limit: int = 200) 
                                 message_id, subject, sender_name, sender_email, recipients,
                                 date_sent, date_timestamp, body_text, body_html, headers,
                                 mbox_source, thread_id, has_attachments, attachment_names
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                , is_read, is_junk, is_archived
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                             """,
                             (
                                 message_id,
@@ -458,6 +568,9 @@ def sync_account(account_id: int, folder_name: str = "INBOX", limit: int = 200) 
                                 thread_id,
                                 1 if has_attachments else 0,
                                 attachment_names_json,
+                                rule_actions["is_read"],
+                                rule_actions["is_junk"],
+                                rule_actions["is_archived"],
                             ),
                         )
                     inserted_count += 1
@@ -492,6 +605,12 @@ def sync_account(account_id: int, folder_name: str = "INBOX", limit: int = 200) 
                 """,
                 (fetched_count, inserted_count, skipped_count, run_id),
             )
+
+        # Opportunistically retry queued outbound messages whenever sync succeeds.
+        try:
+            process_outbox(max_items=10)
+        except Exception as exc:
+            log.warning("Outbox flush after sync failed: %s", exc)
 
         return {
             "account_id": account_id,
@@ -562,6 +681,7 @@ def send_email(
     cc: Optional[list[str]] = None,
     bcc: Optional[list[str]] = None,
     body_html: Optional[str] = None,
+    queue_on_failure: bool = True,
 ) -> dict:
     account = get_account(account_id)
     if not account:
@@ -571,6 +691,19 @@ def send_email(
     if not to:
         raise ValueError("Recipient list cannot be empty")
 
+    return _send_or_queue(
+        account=account,
+        to=to,
+        cc=cc or [],
+        bcc=bcc or [],
+        subject=subject,
+        body_text=body_text,
+        body_html=body_html,
+        queue_on_failure=queue_on_failure,
+    )
+
+
+def _build_message(account: MailAccount, to: list[str], cc: list[str], subject: str, body_text: str, body_html: Optional[str]) -> EmailMessage:
     msg = EmailMessage()
     msg["From"] = f"{account.display_name} <{account.email_address}>"
     msg["To"] = ", ".join(to)
@@ -580,9 +713,12 @@ def send_email(
     msg.set_content(body_text or "")
     if body_html:
         msg.add_alternative(body_html, subtype="html")
+    return msg
 
-    recipients = list(to) + (cc or []) + (bcc or [])
 
+def _send_via_smtp(account: MailAccount, to: list[str], cc: list[str], bcc: list[str], subject: str, body_text: str, body_html: Optional[str]) -> dict:
+    msg = _build_message(account, to, cc, subject, body_text, body_html)
+    recipients = list(to) + cc + bcc
     smtp = _smtp_connect(account)
     try:
         smtp.send_message(msg, from_addr=account.email_address, to_addrs=recipients)
@@ -591,11 +727,213 @@ def send_email(
             smtp.quit()
         except Exception:
             pass
-
     return {
         "ok": True,
+        "queued": False,
+        "status": "sent",
         "sent_at": _now_iso(),
-        "account_id": account_id,
+        "account_id": account.id,
         "recipient_count": len(recipients),
         "subject": msg["Subject"],
+        "outbox_id": None,
     }
+
+
+def enqueue_outbox(account_id: int, to: list[str], cc: Optional[list[str]], bcc: Optional[list[str]], subject: str, body_text: str, body_html: Optional[str]) -> dict:
+    import json
+    with get_db() as conn:
+        cur = conn.execute(
+            """
+            INSERT INTO mail_outbox (
+                account_id, to_json, cc_json, bcc_json,
+                subject, body_text, body_html,
+                status, attempt_count, next_attempt_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 0, datetime('now'), datetime('now'))
+            """,
+            (
+                account_id,
+                json.dumps(to or []),
+                json.dumps(cc or []),
+                json.dumps(bcc or []),
+                subject or "",
+                body_text or "",
+                body_html,
+            ),
+        )
+        outbox_id = cur.lastrowid
+    return {"outbox_id": outbox_id, "status": "pending"}
+
+
+def _send_or_queue(account: MailAccount, to: list[str], cc: list[str], bcc: list[str], subject: str, body_text: str, body_html: Optional[str], queue_on_failure: bool) -> dict:
+    try:
+        return _send_via_smtp(
+            account=account,
+            to=to,
+            cc=cc,
+            bcc=bcc,
+            subject=subject,
+            body_text=body_text,
+            body_html=body_html,
+        )
+    except Exception as exc:
+        if not queue_on_failure:
+            raise
+        queued = enqueue_outbox(
+            account_id=account.id,
+            to=to,
+            cc=cc,
+            bcc=bcc,
+            subject=subject,
+            body_text=body_text,
+            body_html=body_html,
+        )
+        return {
+            "ok": True,
+            "queued": True,
+            "status": "queued",
+            "sent_at": _now_iso(),
+            "account_id": account.id,
+            "recipient_count": len(list(to) + cc + bcc),
+            "subject": subject or "(No Subject)",
+            "outbox_id": queued["outbox_id"],
+            "message": f"SMTP unavailable, queued for retry: {exc}",
+        }
+
+
+def list_outbox(status: Optional[str] = None, limit: int = 200) -> list[dict]:
+    import json
+    sql = "SELECT * FROM mail_outbox"
+    params: list = []
+    if status:
+        sql += " WHERE status = ?"
+        params.append(status)
+    sql += " ORDER BY created_at ASC LIMIT ?"
+    params.append(limit)
+    with get_db() as conn:
+        rows = conn.execute(sql, tuple(params)).fetchall()
+    out = []
+    for row in rows:
+        item = dict(row)
+        item["to"] = json.loads(item.pop("to_json") or "[]")
+        item["cc"] = json.loads(item.pop("cc_json") or "[]")
+        item["bcc"] = json.loads(item.pop("bcc_json") or "[]")
+        out.append(item)
+    return out
+
+
+def _retry_delay_minutes(attempt_count: int) -> int:
+    # Exponential backoff from 1m, capped at 60m.
+    return max(1, min(60, 2 ** max(0, attempt_count - 1)))
+
+
+def process_outbox(max_items: int = 25) -> dict:
+    import json
+    attempted = 0
+    sent = 0
+    failed = 0
+    with get_db() as conn:
+        rows = conn.execute(
+            """
+            SELECT * FROM mail_outbox
+            WHERE status IN ('pending', 'failed')
+              AND (next_attempt_at IS NULL OR next_attempt_at <= datetime('now'))
+            ORDER BY created_at ASC
+            LIMIT ?
+            """,
+            (max_items,),
+        ).fetchall()
+
+    for row in rows:
+        attempted += 1
+        item = dict(row)
+        outbox_id = int(item["id"])
+        with get_db() as conn:
+            conn.execute(
+                "UPDATE mail_outbox SET status = 'sending', updated_at = datetime('now') WHERE id = ?",
+                (outbox_id,),
+            )
+
+        account = get_account(int(item["account_id"]))
+        if not account or not account.enabled:
+            failed += 1
+            with get_db() as conn:
+                conn.execute(
+                    """
+                    UPDATE mail_outbox
+                    SET status = 'failed',
+                        attempt_count = attempt_count + 1,
+                        last_error = ?,
+                        next_attempt_at = datetime('now', '+15 minutes'),
+                        updated_at = datetime('now')
+                    WHERE id = ?
+                    """,
+                    ("Account missing or disabled", outbox_id),
+                )
+            continue
+
+        to = json.loads(item.get("to_json") or "[]")
+        cc = json.loads(item.get("cc_json") or "[]")
+        bcc = json.loads(item.get("bcc_json") or "[]")
+        subject = item.get("subject") or ""
+        body_text = item.get("body_text") or ""
+        body_html = item.get("body_html")
+
+        try:
+            _send_via_smtp(
+                account=account,
+                to=to,
+                cc=cc,
+                bcc=bcc,
+                subject=subject,
+                body_text=body_text,
+                body_html=body_html,
+            )
+            sent += 1
+            with get_db() as conn:
+                conn.execute(
+                    """
+                    UPDATE mail_outbox
+                    SET status = 'sent',
+                        sent_at = datetime('now'),
+                        last_error = NULL,
+                        updated_at = datetime('now')
+                    WHERE id = ?
+                    """,
+                    (outbox_id,),
+                )
+        except Exception as exc:
+            failed += 1
+            next_attempt = _retry_delay_minutes(int(item.get("attempt_count") or 0) + 1)
+            with get_db() as conn:
+                conn.execute(
+                    """
+                    UPDATE mail_outbox
+                    SET status = 'failed',
+                        attempt_count = attempt_count + 1,
+                        last_error = ?,
+                        next_attempt_at = datetime('now', ?),
+                        updated_at = datetime('now')
+                    WHERE id = ?
+                    """,
+                    (str(exc), f"+{next_attempt} minutes", outbox_id),
+                )
+
+    return {"attempted": attempted, "sent": sent, "failed": failed}
+
+
+def retry_outbox_item(outbox_id: int) -> dict:
+    with get_db() as conn:
+        row = conn.execute("SELECT id FROM mail_outbox WHERE id = ?", (outbox_id,)).fetchone()
+        if not row:
+            raise LookupError("Outbox item not found")
+        conn.execute(
+            "UPDATE mail_outbox SET status = 'pending', next_attempt_at = datetime('now'), updated_at = datetime('now') WHERE id = ?",
+            (outbox_id,),
+        )
+    return process_outbox(max_items=1)
+
+
+def delete_outbox_item(outbox_id: int) -> bool:
+    with get_db() as conn:
+        cur = conn.execute("DELETE FROM mail_outbox WHERE id = ?", (outbox_id,))
+    return cur.rowcount > 0

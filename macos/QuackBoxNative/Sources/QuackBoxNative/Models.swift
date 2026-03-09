@@ -11,6 +11,40 @@ struct APIError: Decodable {
     let detail: String?
 }
 
+extension KeyedDecodingContainer {
+    func decodeLossyInt(forKey key: Key) -> Int? {
+        if let value = try? decode(Int.self, forKey: key) {
+            return value
+        }
+        if let value = try? decode(String.self, forKey: key) {
+            return Int(value.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+        if let value = try? decode(Double.self, forKey: key) {
+            return Int(value)
+        }
+        return nil
+    }
+
+    func decodeLossyBool(forKey key: Key) -> Bool? {
+        if let value = try? decode(Bool.self, forKey: key) {
+            return value
+        }
+        if let value = try? decode(Int.self, forKey: key) {
+            return value != 0
+        }
+        if let value = try? decode(String.self, forKey: key) {
+            let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if ["1", "true", "yes", "y"].contains(normalized) {
+                return true
+            }
+            if ["0", "false", "no", "n"].contains(normalized) {
+                return false
+            }
+        }
+        return nil
+    }
+}
+
 struct StatsResponse: Codable {
     let totalEmails: Int
     let uniqueSenders: Int
@@ -39,6 +73,15 @@ struct MailboxItem: Codable, Identifiable, Hashable {
         case firstDate = "first_date"
         case lastDate = "last_date"
         case uniqueSenders = "unique_senders"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        mboxSource = (try? c.decode(String.self, forKey: .mboxSource)) ?? "Unknown"
+        count = c.decodeLossyInt(forKey: .count) ?? 0
+        firstDate = try? c.decode(String.self, forKey: .firstDate)
+        lastDate = try? c.decode(String.self, forKey: .lastDate)
+        uniqueSenders = c.decodeLossyInt(forKey: .uniqueSenders) ?? 0
     }
 }
 
@@ -77,6 +120,19 @@ struct EmailListItem: Codable, Identifiable, Hashable {
         case mboxSource = "mbox_source"
         case threadGroupID = "thread_group_id"
         case snippet
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = c.decodeLossyInt(forKey: .id) ?? 0
+        subject = try? c.decode(String.self, forKey: .subject)
+        senderName = try? c.decode(String.self, forKey: .senderName)
+        senderEmail = try? c.decode(String.self, forKey: .senderEmail)
+        dateSent = try? c.decode(String.self, forKey: .dateSent)
+        hasAttachments = c.decodeLossyBool(forKey: .hasAttachments) ?? false
+        mboxSource = try? c.decode(String.self, forKey: .mboxSource)
+        threadGroupID = c.decodeLossyInt(forKey: .threadGroupID)
+        snippet = try? c.decode(String.self, forKey: .snippet)
     }
 }
 
@@ -203,6 +259,19 @@ struct ThreadListItem: Codable, Identifiable, Hashable {
         case mailboxSources = "mailbox_sources"
         case originalSubject = "original_subject"
     }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = c.decodeLossyInt(forKey: .id) ?? 0
+        rootMessageID = try? c.decode(String.self, forKey: .rootMessageID)
+        subjectNormalized = try? c.decode(String.self, forKey: .subjectNormalized)
+        participantCount = c.decodeLossyInt(forKey: .participantCount) ?? 0
+        messageCount = c.decodeLossyInt(forKey: .messageCount) ?? 0
+        firstDate = try? c.decode(String.self, forKey: .firstDate)
+        lastDate = try? c.decode(String.self, forKey: .lastDate)
+        mailboxSources = (try? c.decode([String].self, forKey: .mailboxSources)) ?? []
+        originalSubject = try? c.decode(String.self, forKey: .originalSubject)
+    }
 }
 
 struct ThreadDetail: Codable, Hashable {
@@ -244,6 +313,18 @@ struct ThreadEmail: Codable, Identifiable, Hashable {
         case bodyText = "body_text"
         case hasAttachments = "has_attachments"
         case attachmentNames = "attachment_names"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = c.decodeLossyInt(forKey: .id) ?? 0
+        subject = try? c.decode(String.self, forKey: .subject)
+        senderName = try? c.decode(String.self, forKey: .senderName)
+        senderEmail = try? c.decode(String.self, forKey: .senderEmail)
+        dateSent = try? c.decode(String.self, forKey: .dateSent)
+        bodyText = try? c.decode(String.self, forKey: .bodyText)
+        hasAttachments = c.decodeLossyBool(forKey: .hasAttachments) ?? false
+        attachmentNames = (try? c.decode([String].self, forKey: .attachmentNames)) ?? []
     }
 }
 
@@ -331,6 +412,7 @@ struct SendEmailRequest: Codable {
     var subject: String
     var bodyText: String
     var bodyHTML: String?
+    var queueOnFailure: Bool = true
 
     enum CodingKeys: String, CodingKey {
         case to
@@ -339,6 +421,7 @@ struct SendEmailRequest: Codable {
         case subject
         case bodyText = "body_text"
         case bodyHTML = "body_html"
+        case queueOnFailure = "queue_on_failure"
     }
 }
 
@@ -394,6 +477,10 @@ struct SendEmailResponse: Codable {
     let accountID: Int
     let recipientCount: Int
     let subject: String
+    let queued: Bool
+    let status: String?
+    let outboxID: Int?
+    let message: String?
 
     enum CodingKeys: String, CodingKey {
         case ok
@@ -401,6 +488,23 @@ struct SendEmailResponse: Codable {
         case accountID = "account_id"
         case recipientCount = "recipient_count"
         case subject
+        case queued
+        case status
+        case outboxID = "outbox_id"
+        case message
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        ok = (try? c.decode(Bool.self, forKey: .ok)) ?? true
+        sentAt = (try? c.decode(String.self, forKey: .sentAt)) ?? ""
+        accountID = c.decodeLossyInt(forKey: .accountID) ?? 0
+        recipientCount = c.decodeLossyInt(forKey: .recipientCount) ?? 0
+        subject = (try? c.decode(String.self, forKey: .subject)) ?? "(No Subject)"
+        queued = c.decodeLossyBool(forKey: .queued) ?? false
+        status = try? c.decode(String.self, forKey: .status)
+        outboxID = c.decodeLossyInt(forKey: .outboxID)
+        message = try? c.decode(String.self, forKey: .message)
     }
 }
 
@@ -420,6 +524,68 @@ struct SyncResponse: Codable {
         case skippedCount = "skipped_count"
         case lastUID = "last_uid"
     }
+}
+
+struct ServerRuleSyncItem: Codable {
+    var enabled: Bool
+    var name: String
+    var field: String
+    var contains: String
+    var action: String
+    var continueEvaluating: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case enabled
+        case name
+        case field
+        case contains
+        case action
+        case continueEvaluating = "continue_evaluating"
+    }
+}
+
+struct OutboxEnvelope: Codable {
+    let items: [OutboxItem]
+}
+
+struct OutboxItem: Codable, Identifiable {
+    let id: Int
+    let accountID: Int
+    let to: [String]
+    let cc: [String]
+    let bcc: [String]
+    let subject: String?
+    let bodyText: String?
+    let status: String
+    let attemptCount: Int
+    let nextAttemptAt: String?
+    let lastError: String?
+    let createdAt: String?
+    let updatedAt: String?
+    let sentAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case accountID = "account_id"
+        case to
+        case cc
+        case bcc
+        case subject
+        case bodyText = "body_text"
+        case status
+        case attemptCount = "attempt_count"
+        case nextAttemptAt = "next_attempt_at"
+        case lastError = "last_error"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case sentAt = "sent_at"
+    }
+}
+
+struct OutboxFlushResponse: Codable {
+    let attempted: Int
+    let sent: Int
+    let failed: Int
 }
 
 struct ComposeDraft: Identifiable {
@@ -515,4 +681,11 @@ struct AppPreferences: Codable {
     var allowNotifications: Bool = true
     var loadRemoteContent: Bool = false
     var protectMailActivity: Bool = true
+
+    var autoSyncEnabled: Bool = true
+    var autoSyncOnLaunch: Bool = true
+    var autoSyncIntervalMinutes: Double = 5
+    var autoSyncFetchLimit: Int = 200
+    var autoSyncDefaultFoldersRaw: String = "INBOX"
+    var autoSyncFolderOverridesByAccount: [String: String] = [:]
 }
