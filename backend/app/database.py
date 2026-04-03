@@ -3,6 +3,9 @@ import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
 from app.config import DB_PATH
+from app.logging_config import get_logger
+
+log = get_logger("database")
 
 def get_connection(db_path: Path = DB_PATH):
     conn = sqlite3.connect(str(db_path))
@@ -209,7 +212,7 @@ def init_db(db_path: Path = DB_PATH):
             )
         """)
 
-    print(f"✅ Database initialized at {db_path}")
+    log.info("Database initialized at %s", db_path)
 
 def get_stats(db_path: Path = DB_PATH):
     with get_db(db_path) as conn:

@@ -9,12 +9,15 @@ Features:
 - Instant search endpoint (lightweight, no COUNT)
 """
 
-import json
+import json, logging
 import re
 from typing import Optional
 
 from app.database import get_db
 from app.utils.email_utils import make_snippet
+from app.logging_config import get_logger
+
+log = get_logger("search")
 
 
 # BM25 column weights: subject=10, sender_name=5, sender_email=3, body_text=1
@@ -58,7 +61,7 @@ def full_text_search(
                 LIMIT ? OFFSET ?
             """, (safe_query, page_size, offset)).fetchall()
         except Exception as exc:
-            print(f"  ⚠ FTS5 search error: {exc}")
+            log.warning("FTS5 search error: %s", exc)
             return {"results": [], "total": 0, "query": query, "page": page, "page_size": page_size}
 
         results = []

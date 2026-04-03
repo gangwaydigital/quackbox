@@ -5,6 +5,7 @@ Supports incremental ingestion (default) and forced full re-scan.
 """
 import asyncio
 import time
+import logging
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, HTTPException, Query
@@ -12,6 +13,11 @@ from app.config import DATA_DIR
 from app.models import IngestRequest, IngestResponse
 from app.services.indexer import ingest_mbox, ingest_all, get_source_status
 from app.services.emlx_parser import find_emlx_files
+from app.logging_config import get_logger
+
+log = get_logger("ingest")
+router = APIRouter(prefix="/api/ingest", tags=["ingest"])
+_executor = ThreadPoolExecutor(max_workers=1)
 
 router = APIRouter(prefix="/api/ingest", tags=["ingest"])
 _executor = ThreadPoolExecutor(max_workers=1)
@@ -159,12 +165,12 @@ def _run_ingest(incremental: bool = True):
                 from app.services.analytics import warm_cache
                 warm_cache()
             except Exception as e:
-                print(f"⚠️  Cache warming failed (non-fatal): {e}")
+                log.warning("Cache warming failed (non-fatal): %s", e)
             try:
                 from app.services.attachment_indexer import index_all_attachments
                 index_all_attachments()
             except Exception as e:
-                print(f"⚠️  Attachment indexing failed (non-fatal): {e}")
+                log.warning("Attachment indexing failed (non-fatal): %s", e)
 
     except Exception as e:
         _ingest_status.update({

@@ -30,10 +30,6 @@ EMBED_MODEL = os.environ.get("EMBED_MODEL", os.environ.get("OLLAMA_EMBED_MODEL",
 EMBED_API_TYPE = os.environ.get("EMBED_API_TYPE", "ollama")  # "ollama" or "openai"
 EMBEDDING_DIMENSIONS = int(os.environ.get("EMBEDDING_DIMENSIONS", "768"))
 
-# Legacy compat
-OLLAMA_BASE_URL = CHAT_API_URL
-OLLAMA_EMBED_MODEL = EMBED_MODEL
-
 # -- Clustering --
 DEFAULT_NUM_CLUSTERS = 15
 MIN_CLUSTER_SIZE = 5

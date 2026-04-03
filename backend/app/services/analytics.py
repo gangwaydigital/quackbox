@@ -6,9 +6,12 @@ Features:
 - Single-query sparklines (no N+1)
 - Batch loading for dashboard
 """
-import json, time
+import json, time, logging
 from collections import defaultdict
 from app.database import get_db
+from app.logging_config import get_logger
+
+log = get_logger("analytics")
 
 # Cache TTL in seconds (1 hour default — data doesn't change between imports)
 CACHE_TTL = 3600
@@ -230,13 +233,13 @@ def invalidate_cache():
     """Clear all cached analytics (call after ingest or data changes)."""
     with get_db() as conn:
         conn.execute("DELETE FROM analytics_cache")
-    print("🗑️  Analytics cache invalidated")
+    log.info("Analytics cache invalidated")
 
 
 def warm_cache():
     """Pre-compute and cache all analytics. Call after ingest."""
     start = time.time()
-    print("📊 Warming analytics cache...")
+    log.info("Warming analytics cache...")
     with get_db() as conn:
         _set_cache("volume_by_month", email_volume_by_month(), conn)
         _set_cache("top_contacts", top_contacts(30), conn)
@@ -245,7 +248,7 @@ def warm_cache():
         _set_cache("mailbox_breakdown", mailbox_breakdown(), conn)
         _set_cache("thread_stats", thread_stats(), conn)
     elapsed = round(time.time() - start, 1)
-    print(f"✅ Analytics cache warmed in {elapsed}s")
+    log.info("Analytics cache warmed in %ss", elapsed)
     return {"duration_seconds": elapsed}
 
 

@@ -11,7 +11,7 @@ Uses Ollama to generate structured summaries of email threads:
 import json
 import requests
 from typing import Optional
-from app.config import OLLAMA_BASE_URL
+from app.config import CHAT_API_URL
 from app.database import get_db
 
 SUMMARIZE_MODEL = "llama3.1:8b"
@@ -68,7 +68,7 @@ Important: Return ONLY valid JSON. No markdown, no explanations, just the JSON o
 
     try:
         resp = requests.post(
-            f"{OLLAMA_BASE_URL}/api/chat",
+            f"{CHAT_API_URL}/api/chat",
             json={
                 "model": model,
                 "messages": [
@@ -147,7 +147,7 @@ Respond with JSON:
 
     try:
         resp = requests.post(
-            f"{OLLAMA_BASE_URL}/api/chat",
+            f"{CHAT_API_URL}/api/chat",
             json={
                 "model": model,
                 "messages": [
