@@ -4,7 +4,7 @@
 
 QuackBox is a self-hosted email intelligence platform that transforms `.mbox` and Apple Mail archives into a searchable, analyzable knowledge base. Explore decades of email with AI-powered search, conversation threading, contact profiling, and interactive visualizations — all running locally in Docker.
 
-![Version](https://img.shields.io/badge/version-4.0.0-blue) ![Stack](https://img.shields.io/badge/stack-Python%20%7C%20React%20%7C%20SQLite-green) ![License](https://img.shields.io/badge/license-MIT-gray)
+![Version](https://img.shields.io/badge/version-4.1.0-blue) ![Stack](https://img.shields.io/badge/stack-Python%20%7C%20React%20%7C%20SQLite-green) ![License](https://img.shields.io/badge/license-MIT-gray)
 
 ---
 
@@ -26,7 +26,7 @@ QuackBox is a self-hosted email intelligence platform that transforms `.mbox` an
 - **Similar Emails** — Find related messages using embedding similarity
 
 ### Organization
-- **Threads** — Reconstructed email conversations from References/In-Reply-To headers with participant tracking
+- **Threads** — Reconstructed email conversations from References/In-Reply-To headers with participant tracking, expandable tree view with color-coded avatars
 - **Contacts** — Directory with relationship scoring, communication frequency sparklines, and duplicate merge detection
 - **Sentiment Analysis** — Contact-level sentiment trends across your archive
 - **Bookmarks & Tags** — Star emails, create color-coded tags, bulk operations from search results
@@ -40,6 +40,12 @@ QuackBox is a self-hosted email intelligence platform that transforms `.mbox` an
 - **Setup Wizard** — First-run auto-detection with live import progress bar showing per-source counts and elapsed time
 - **Export** — CSV export for emails, contacts, and threads; printable HTML thread export; single-email .eml export; attachment binary download from original source files
 - **Configurable Data Path** — Point `DATA_PATH` to any directory via `.env` instead of copying files
+
+### v4.1.0 New Features
+- **Thread List View** — Thread summary cards with expandable email trees in chronological order
+- **Thread Tree Visualization** — Full tree diagram showing reply hierarchy with sender avatars and color coding
+- **Thread Summary Cards** — Message count, participant count, and duration displayed in thread cards
+- **Email Table Thread Indicators** — Thread badge and reply count indicator on individual emails
 
 ### Performance
 - **Batch Dashboard API** — Single endpoint loads all dashboard data in one request instead of 6
