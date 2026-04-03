@@ -29,6 +29,7 @@ function formatDuration(seconds) {
 export function ThreadList() {
   const [threads, setThreads] = useState([])
   const [expandedThreads, setExpandedThreads] = useState(new Set())
+  const [expandedThreadEmails, setExpandedThreadEmails] = useState({})
   const [pagination, setPagination] = useState({ page: 1, total: 0, total_pages: 1 })
   const [sortBy, setSortBy] = useState('last_date')
   const [minMessages, setMinMessages] = useState(2)
@@ -79,16 +80,27 @@ export function ThreadList() {
     }
   }
 
-  const toggleThread = (threadId) => {
-    setExpandedThreads(prev => {
-      const next = new Set(prev)
-      if (next.has(threadId)) {
-        next.delete(threadId)
-      } else {
-        next.add(threadId)
+  const toggleThread = async (threadId) => {
+    const nextExpanded = new Set(expandedThreads)
+    if (nextExpanded.has(threadId)) {
+      nextExpanded.delete(threadId)
+      // Clear emails when collapsing
+      setExpandedThreadEmails(prev => {
+        const next = { ...prev }
+        delete next[threadId]
+        return next
+      })
+    } else {
+      nextExpanded.add(threadId)
+      // Fetch emails when expanding
+      try {
+        const data = await api.getThread(threadId)
+        setExpandedThreadEmails(prev => ({ ...prev, [threadId]: data.emails || [] }))
+      } catch (err) {
+        console.error('Failed to fetch thread emails:', err)
       }
-      return next
-    })
+    }
+    setExpandedThreads(nextExpanded)
   }
 
   return (
@@ -183,7 +195,7 @@ export function ThreadList() {
               {/* Expanded thread content (email tree) */}
               {expandedThreads.has(t.id) && (
                 <div className="px-4 pb-4 pt-0 border-t border-gray-100 bg-gray-50/50">
-                  <ThreadEmailTree thread={t} />
+                  <ThreadEmailTree emails={expandedThreadEmails[t.id] || []} messageCount={t.message_count} />
                 </div>
               )}
             </div>
@@ -215,35 +227,24 @@ export function ThreadList() {
   )
 }
 
-function ThreadEmailTree({ thread }) {
-  // Group emails by reply level using depth calculation
-  const emails = thread.emails || []
+function ThreadEmailTree({ emails, messageCount }) {
   const CL = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#6366f1']
-
-  const getLevel = (emailIndex) => {
-    // Simple level calculation: emails at index 0 are level 0, replies are deeper
-    // We use a heuristic based on date gaps or just assign based on position
-    if (emailIndex === 0) return 0
-    return 1 // All replies at level 1 for now
-  }
 
   return (
     <div className="py-3">
       <div className="flex items-center gap-2 mb-3 px-1">
         <span className="text-xs font-medium text-gray-500 flex items-center gap-1.5">
           <MessageSquare className="w-3 h-3" />
-          Conversation ({emails.length} messages)
+          Conversation ({messageCount} messages)
         </span>
       </div>
       <div className="space-y-2">
         {emails.map((email, i) => {
-          const level = getLevel(i)
           const senderEmail = email.sender_email || 'unknown@example.com'
           const senderName = email.sender_name || senderEmail.split('@')[0]
           const colorIndex = Array.from(new Set(emails.map(e => e.sender_email || ''))).indexOf(senderEmail)
           const color = CL[colorIndex >= 0 ? colorIndex % CL.length : 0]
           const init = senderName.charAt(0).toUpperCase() || '?'
-
           return (
             <div key={email.id} className="flex gap-3 animate-in fade-in duration-200">
               {/* Thread tree connector */}
@@ -262,7 +263,7 @@ function ThreadEmailTree({ thread }) {
                 <div className="px-4 py-2.5 hover:bg-gray-50">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-gray-800">{senderName}</span>
+                      <span className="text-sm font-semibold text-gray-800">{email.sender_name || email.sender_email}</span>
                       {email.has_attachments && <Paperclip className="w-3 h-3 text-gray-400" />}
                     </div>
                     <span className="text-xs text-gray-500">{formatDate(email.date_sent)}</span>
