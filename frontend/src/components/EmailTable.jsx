@@ -7,19 +7,6 @@ function highlightText(text, query) {
   if (words.length === 0) return text
   const escaped = words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')
   const pattern = new RegExp(`(${escaped})`, 'gi')
-  const matchTest = new RegExp(`^(?:${escaped})$`, 'i')
-  return parts.map((part, i) =>
-    matchTest.test(part) ? <mark key={i} className="search-highlight">{part}</mark> : part
-  )
-}
-
-// Helper to create highlight parts (fixed the reference issue)
-function highlightText(text, query) {
-  if (!query || !text) return text
-  const words = query.trim().split(/\s+/).filter(w => w.length > 2)
-  if (words.length === 0) return text
-  const escaped = words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')
-  const pattern = new RegExp(`(${escaped})`, 'gi')
   const parts = text.split(pattern)
   const matchTest = new RegExp(`^(?:${escaped})$`, 'i')
   return parts.map((part, i) =>
