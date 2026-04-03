@@ -7,11 +7,37 @@ function highlightText(text, query) {
   if (words.length === 0) return text
   const escaped = words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')
   const pattern = new RegExp(`(${escaped})`, 'gi')
+  const matchTest = new RegExp(`^(?:${escaped})$`, 'i')
+  return parts.map((part, i) =>
+    matchTest.test(part) ? <mark key={i} className="search-highlight">{part}</mark> : part
+  )
+}
+
+// Helper to create highlight parts (fixed the reference issue)
+function highlightText(text, query) {
+  if (!query || !text) return text
+  const words = query.trim().split(/\s+/).filter(w => w.length > 2)
+  if (words.length === 0) return text
+  const escaped = words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')
+  const pattern = new RegExp(`(${escaped})`, 'gi')
   const parts = text.split(pattern)
   const matchTest = new RegExp(`^(?:${escaped})$`, 'i')
   return parts.map((part, i) =>
     matchTest.test(part) ? <mark key={i} className="search-highlight">{part}</mark> : part
   )
+}
+
+function formatDate(isoString) {
+  if (!isoString) return ''
+  try {
+    const date = new Date(isoString)
+    const now = new Date()
+    const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24))
+    if (diffDays === 0) return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    if (diffDays < 7) return date.toLocaleDateString([], { weekday: 'short' })
+    if (date.getFullYear() === now.getFullYear()) return date.toLocaleDateString([], { month: 'short', day: 'numeric' })
+    return date.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' })
+  } catch { return isoString.slice(0, 10) }
 }
 
 function Skeleton({ className = '' }) {
@@ -54,6 +80,16 @@ export default function EmailTable({
     </div>
   )
 
+  // Group emails by thread for display
+  const emailsByThread = new Map()
+  emails.forEach(email => {
+    if (email.thread_group_id) {
+      const existing = emailsByThread.get(email.thread_group_id) || []
+      existing.push(email)
+      emailsByThread.set(email.thread_group_id, existing)
+    }
+  })
+
   const rowClass = (email) => {
     const base = 'block w-full text-left px-4 py-3 transition-colors'
     const active = selectedId && String(email.id) === String(selectedId)
@@ -61,32 +97,46 @@ export default function EmailTable({
     return `${base} hover:bg-gray-50 dark:hover:bg-gray-800 border-l-2 border-transparent`
   }
 
-  const rowContent = (email) => (
-    <div className="flex items-start justify-between gap-4">
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-medium text-sm text-gray-900 dark:text-gray-100 truncate">
-            {highlightText(email.sender_name || email.sender_email || 'Unknown', searchQuery)}
-          </span>
-          {email.has_attachments && <Paperclip className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />}
+  const rowContent = (email) => {
+    const isThreadRoot = email.thread_group_id && !email.thread_reply_to_id
+    const threadCount = emailsByThread.get(email.thread_group_id)?.length || 0
+    const isReplied = threadCount > 1 && !isThreadRoot
+
+    return (
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1 min-w-0">
+          {/* Thread indicator for emails in threads */}
           {email.thread_group_id && (
-            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300 rounded text-[10px] font-medium flex-shrink-0">
-              <MessageSquare className="w-2.5 h-2.5" />thread
-            </span>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300 rounded text-[10px] font-medium flex-shrink-0">
+                <MessageSquare className="w-2.5 h-2.5" />thread
+              </span>
+              {isReplied && (
+                <span className="text-[10px] text-gray-400 flex items-center gap-1">
+                  {threadCount - 1} reply{threadCount - 1 !== 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
           )}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-medium text-sm text-gray-900 dark:text-gray-100 truncate">
+              {highlightText(email.sender_name || email.sender_email || 'Unknown', searchQuery)}
+            </span>
+            {email.has_attachments && <Paperclip className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />}
+          </div>
+          <div className="text-sm text-gray-800 dark:text-gray-200 truncate mt-0.5">
+            {email.highlight_subject
+              ? <span dangerouslySetInnerHTML={{ __html: email.highlight_subject }} />
+              : highlightText(email.subject || '(no subject)', searchQuery)}
+          </div>
+          {email.highlight_body
+            ? <div className="text-xs text-gray-400 mt-0.5 truncate search-preview-hl" dangerouslySetInnerHTML={{ __html: email.highlight_body }} />
+            : email.snippet && <div className="text-xs text-gray-400 truncate mt-0.5">{highlightText(email.snippet, searchQuery)}</div>}
         </div>
-        <div className="text-sm text-gray-800 dark:text-gray-200 truncate mt-0.5">
-          {email.highlight_subject
-            ? <span dangerouslySetInnerHTML={{ __html: email.highlight_subject }} />
-            : highlightText(email.subject || '(no subject)', searchQuery)}
-        </div>
-        {email.highlight_body
-          ? <div className="text-xs text-gray-400 mt-0.5 truncate search-preview-hl" dangerouslySetInnerHTML={{ __html: email.highlight_body }} />
-          : email.snippet && <div className="text-xs text-gray-400 truncate mt-0.5">{highlightText(email.snippet, searchQuery)}</div>}
+        <div className="text-xs text-gray-400 whitespace-nowrap flex-shrink-0">{formatDate(email.date_sent)}</div>
       </div>
-      <div className="text-xs text-gray-400 whitespace-nowrap flex-shrink-0">{formatDate(email.date_sent)}</div>
-    </div>
-  )
+    )
+  }
 
   return (
     <div className="space-y-3">
@@ -123,17 +173,4 @@ export default function EmailTable({
       )}
     </div>
   )
-}
-
-function formatDate(isoString) {
-  if (!isoString) return ''
-  try {
-    const date = new Date(isoString)
-    const now = new Date()
-    const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24))
-    if (diffDays === 0) return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    if (diffDays < 7) return date.toLocaleDateString([], { weekday: 'short' })
-    if (date.getFullYear() === now.getFullYear()) return date.toLocaleDateString([], { month: 'short', day: 'numeric' })
-    return date.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' })
-  } catch { return isoString.slice(0, 10) }
 }

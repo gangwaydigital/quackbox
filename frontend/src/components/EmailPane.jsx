@@ -237,6 +237,14 @@ export default function EmailPane({ emailId, onClose, compact = false }) {
               {email.date_sent ? new Date(email.date_sent).toLocaleString() : 'Unknown'}
             </span>
           </div>
+          {email.thread_group_id && (
+            <div className="flex gap-2">
+              <span className="text-gray-400 w-12 flex-shrink-0 text-xs pt-0.5">Thread</span>
+              <Link to={`/thread/${email.thread_group_id}`} className="text-blue-600 text-xs hover:underline flex items-center gap-1">
+                <MessageSquare className="w-3 h-3" /> View conversation
+              </Link>
+            </div>
+          )}
           <div className="flex gap-2">
             <span className="text-gray-400 w-12 flex-shrink-0 text-xs pt-0.5">Source</span>
             <span className="text-gray-400 text-xs font-mono">{email.mbox_source}</span>
