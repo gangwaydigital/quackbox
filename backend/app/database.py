@@ -237,4 +237,5 @@ def get_stats(db_path: Path = DB_PATH):
         stats["unique_senders"] = row["senders"]
         stats["mbox_sources"] = row["sources"]
         stats["date_range"] = {"earliest": row["earliest"], "latest": row["latest"]}
+        stats["version"] = "4.1.2"
         return stats
