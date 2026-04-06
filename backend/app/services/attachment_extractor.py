@@ -182,12 +182,20 @@ def _find_message(email_id: int):
     """
     with get_db() as conn:
         row = conn.execute(
-            "SELECT message_id, mbox_source FROM emails WHERE id = ?",
+            "SELECT message_id, mbox_source, raw_message FROM emails WHERE id = ?",
             (email_id,)
         ).fetchone()
 
     if not row or not row["message_id"]:
         return None, None
+
+    # If raw bytes exist, parse them directly
+    if row["raw_message"]:
+        try:
+            msg = email.message_from_bytes(row["raw_message"], policy=policy.compat32)
+            return msg, row
+        except Exception as e:
+            log.warning("Error parsing stored raw_message for email %d: %s", email_id, e)
 
     message_id = row["message_id"]
     mbox_source = row["mbox_source"] or ""
@@ -288,17 +296,33 @@ def export_eml(email_id: int) -> Optional[dict]:
 
     Returns dict with 'data' (bytes), 'filename', or None.
     """
-    msg, row = _find_message(email_id)
-    if msg is None:
-        return None
-
     with get_db() as conn:
-        email_row = conn.execute(
-            "SELECT subject FROM emails WHERE id = ?",
+        row = conn.execute(
+            "SELECT raw_message, subject FROM emails WHERE id = ?",
             (email_id,)
         ).fetchone()
 
-    subject = (email_row["subject"] or "no-subject") if email_row else "email"
+    if not row:
+        return None
+
+    # If raw bytes exist in database, use them directly (best for .eml export)
+    if row["raw_message"]:
+        subject = (row["subject"] or "no-subject") if row else "email"
+        safe_subject = "".join(
+            c if c.isalnum() or c in " -_" else "_" for c in subject
+        )[:60].strip()
+        filename = f"{safe_subject}.eml"
+        return {
+            "data": row["raw_message"],
+            "filename": filename,
+        }
+
+    # Fallback: reconstruct from parsed fields
+    msg, _ = _find_message(email_id)
+    if msg is None:
+        return None
+
+    subject = (row["subject"] or "no-subject") if row else "email"
     safe_subject = "".join(
         c if c.isalnum() or c in " -_" else "_" for c in subject
     )[:60].strip()

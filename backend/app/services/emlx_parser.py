@@ -53,10 +53,10 @@ def parse_emlx_file(emlx_path: Path, source_name: str = None) -> Optional[dict]:
     except Exception as e:
         log.warning("Cannot parse email from %s: %s", emlx_path.name, e)
         return None
-    return _message_to_record(msg, source_name or "Unknown")
+    return _message_to_record(msg, source_name or "Unknown", raw_bytes=raw)
 
 
-def _message_to_record(msg, source: str) -> Optional[dict]:
+def _message_to_record(msg, source: str, raw_bytes: bytes = None) -> Optional[dict]:
     """Convert an email.message.Message into a flat dict for database insertion."""
     message_id = msg.get("Message-ID", "")
     if message_id:
@@ -74,7 +74,7 @@ def _message_to_record(msg, source: str) -> Optional[dict]:
     has_attachments, attachment_names = extract_attachments(msg)
     thread_id = extract_thread_id(msg)
     headers = {k: decode_email_header(v) for k, v in msg.items()}
-    return {
+    result = {
         "message_id": message_id or None,
         "subject": subject,
         "sender_name": sender_name,
@@ -90,6 +90,10 @@ def _message_to_record(msg, source: str) -> Optional[dict]:
         "has_attachments": has_attachments,
         "attachment_names": json.dumps(attachment_names),
     }
+    # Store raw message bytes if provided (for .eml export)
+    if raw_bytes is not None:
+        result["raw_message"] = raw_bytes
+    return result
 
 
 def find_emlx_files(data_dir: Path) -> dict[str, list[Path]]:

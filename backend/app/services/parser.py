@@ -7,9 +7,15 @@ ready for database insertion.
 
 import json
 import mailbox
+import re
 import time
+from email import policy as _policy
+from email import message_from_bytes as _email_message_from_bytes
 from pathlib import Path
 from typing import Generator
+
+# Mbox "From " separator pattern
+_FROM_LINE = re.compile(rb'^From ', re.MULTILINE)
 
 from app.config import MAX_BODY_LENGTH
 from app.logging_config import get_logger
@@ -34,21 +40,36 @@ def parse_mbox(mbox_path: Path, source_name: str = None) -> Generator[dict, None
         dict with keys matching the emails table schema.
     """
     source = source_name or mbox_path.name
-    mbox = mailbox.mbox(str(mbox_path))
+    mbox_bytes = mbox_path.read_bytes()
 
-    for key, msg in mbox.items():
+    # Find message boundaries using "From " pattern
+    from_lines = list(_FROM_LINE.finditer(mbox_bytes))
+    if not from_lines:
+        return
+
+    for i, start_match in enumerate(from_lines):
+        start = start_match.start()
+        # Get the raw message bytes (from "From " line to next "From " line)
+        end = from_lines[i + 1].start() if i + 1 < len(from_lines) else len(mbox_bytes)
+        raw_msg_bytes = mbox_bytes[start:end]
+
+        # Skip "From " separator line to get the actual message
+        first_nl = raw_msg_bytes.find(b"\n")
+        if first_nl == -1:
+            continue
+        msg_bytes = raw_msg_bytes[first_nl + 1:]
+
         try:
-            record = _parse_message(msg, source=mbox_path.name)
+            msg = _email_message_from_bytes(msg_bytes, policy=_policy.compat32)
+            record = _parse_message(msg, source=mbox_path.name, raw_bytes=msg_bytes)
             if record:
                 yield record
         except Exception as e:
-            log.warning("Error parsing message %s: %s", key, e)
+            log.warning("Error parsing message at offset %d: %s", start, e)
             continue
 
-    mbox.close()
 
-
-def _parse_message(msg, source: str) -> dict | None:
+def _parse_message(msg, source: str, raw_bytes: bytes = None) -> dict | None:
     """Parse a single email message into a database record."""
 
     # -- Message ID (required for dedup) --
@@ -85,7 +106,7 @@ def _parse_message(msg, source: str) -> dict | None:
     # -- All headers (for advanced queries) --
     headers = {k: decode_email_header(v) for k, v in msg.items()}
 
-    return {
+    result = {
         "message_id": message_id or None,
         "subject": subject,
         "sender_name": sender_name,
@@ -101,6 +122,12 @@ def _parse_message(msg, source: str) -> dict | None:
         "has_attachments": has_attachments,
         "attachment_names": json.dumps(attachment_names),
     }
+
+    # Store raw message bytes if provided (for .eml export)
+    if raw_bytes is not None:
+        result["raw_message"] = raw_bytes
+
+    return result
 
 
 def count_messages(mbox_path: Path) -> int:

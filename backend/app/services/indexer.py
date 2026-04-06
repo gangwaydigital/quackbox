@@ -21,6 +21,9 @@ import email as _email_mod
 from email import policy as _policy
 from pathlib import Path
 
+# Re-import parser's _FROM_LINE for _split_mbox_bytes consistency
+_FROM_LINE = re.compile(rb"^From ", re.MULTILINE)
+
 from app.database import get_db
 from app.logging_config import get_logger
 from app.services.parser import parse_mbox, count_messages, _parse_message
@@ -28,17 +31,15 @@ from app.services.emlx_parser import parse_emlx_file, find_emlx_files
 
 log = get_logger("indexer")
 
-_FROM_LINE = re.compile(rb"^From ", re.MULTILINE)
-
 _INSERT_SQL = """
     INSERT INTO emails (
         message_id, subject, sender_name, sender_email, recipients,
         date_sent, date_timestamp, body_text, body_html, headers,
-        mbox_source, thread_id, has_attachments, attachment_names
+        mbox_source, thread_id, has_attachments, attachment_names, raw_message
     ) VALUES (
         :message_id, :subject, :sender_name, :sender_email, :recipients,
         :date_sent, :date_timestamp, :body_text, :body_html, :headers,
-        :mbox_source, :thread_id, :has_attachments, :attachment_names
+        :mbox_source, :thread_id, :has_attachments, :attachment_names, :raw_message
     )
 """
 
@@ -166,7 +167,7 @@ def ingest_mbox(mbox_path: Path, incremental: bool = True) -> dict:
                 for i, msg_bytes in enumerate(chunks):
                     try:
                         msg = _email_mod.message_from_bytes(msg_bytes, policy=_policy.compat32)
-                        rec = _parse_message(msg, source=mbox_path.name)
+                        rec = _parse_message(msg, source=mbox_path.name, raw_bytes=msg_bytes)
                         if rec is None:
                             skipped += 1
                             continue
