@@ -39,11 +39,13 @@ export function ContactList() {
     <div className="space-y-4">
       {/* Sub-navigation */}
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+        <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
           {subTabs.map(({ id, icon: Icon, label }) => (
             <button key={id} onClick={() => setSubTab(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                subTab === id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                subTab === id
+                  ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
               }`}>
               <Icon className="w-3.5 h-3.5" />{label}
             </button>
@@ -54,15 +56,18 @@ export function ContactList() {
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
               <input type="text" value={search} onChange={e => setSearch(e.target.value)}
-                placeholder="Search contacts..." className="pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg w-48 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                placeholder="Search contacts..."
+                className="pl-8 pr-3 py-1.5 text-xs border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-white rounded-lg w-48 focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
-            <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="text-xs border border-gray-200 rounded-lg px-2 py-1.5">
+            <select value={sortBy} onChange={e => setSortBy(e.target.value)}
+              className="text-xs border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-white rounded-lg px-2 py-1.5">
               <option value="total">Most Emails</option>
               <option value="last">Most Recent</option>
               <option value="name">Name A-Z</option>
               <option value="first">Earliest Contact</option>
             </select>
-            <a href="/api/export/contacts" download className="flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-100 rounded-lg hover:bg-gray-200">
+            <a href="/api/export/contacts" download
+              className="flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-100 dark:bg-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700">
               <Download className="w-3.5 h-3.5" /> CSV
             </a>
           </div>
@@ -74,24 +79,32 @@ export function ContactList() {
       {subTab === 'merge' && <ContactMerge />}
       {subTab === 'directory' && (
         <>
-          <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800">
             {loading ? (
               <div className="p-4 space-y-2">{Array.from({length:8},(_,i)=><div key={i} className="skeleton h-14 rounded-lg" />)}</div>
             ) : contacts.length === 0 ? (
-              <div className="p-8 text-center text-gray-400">No contacts found</div>
+              <div className="p-12 text-center">
+                <Users className="w-10 h-10 text-gray-300 dark:text-gray-700 mx-auto mb-3" />
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-300">
+                  {search ? 'No contacts match your search.' : 'No contacts yet.'}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {search ? 'Try a different name or email.' : 'Import an mbox archive to populate your directory.'}
+                </p>
+              </div>
             ) : contacts.map((c, i) => (
               <Link key={c.sender_email} to={`/contact/${encodeURIComponent(c.sender_email)}`}
-                className="flex items-center gap-4 px-4 py-3 hover:bg-gray-50 transition-colors">
+                className="flex items-center gap-4 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                 <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium text-white flex-shrink-0"
                   style={{ backgroundColor: COLORS[i % COLORS.length] }}>
                   {(c.display_name || c.sender_email).charAt(0).toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-gray-800 truncate">{c.display_name || c.sender_email}</div>
+                  <div className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{c.display_name || c.sender_email}</div>
                   <div className="text-xs text-gray-400 truncate">{c.sender_email}</div>
                 </div>
                 <div className="text-right flex-shrink-0 space-y-0.5">
-                  <div className="text-sm font-semibold text-gray-600">{c.total_emails.toLocaleString()}</div>
+                  <div className="text-sm font-semibold text-gray-600 dark:text-gray-300">{c.total_emails.toLocaleString()}</div>
                   <div className="text-[10px] text-gray-400 flex items-center gap-2 justify-end">
                     {c.thread_count > 0 && <span className="flex items-center gap-0.5"><MessageSquare className="w-2.5 h-2.5" />{c.thread_count}</span>}
                     <span>{c.mailbox_count} mailbox{c.mailbox_count !== 1 ? 'es' : ''}</span>
@@ -101,11 +114,13 @@ export function ContactList() {
             ))}
           </div>
           {pagination.total_pages > 1 && (
-            <div className="flex items-center justify-between text-sm text-gray-500">
+            <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
               <span>Page {pagination.page} of {pagination.total_pages}</span>
               <div className="flex gap-2">
-                <button onClick={() => load(pagination.page - 1)} disabled={pagination.page <= 1} className="px-3 py-1 rounded border disabled:opacity-40 hover:bg-gray-50">Prev</button>
-                <button onClick={() => load(pagination.page + 1)} disabled={pagination.page >= pagination.total_pages} className="px-3 py-1 rounded border disabled:opacity-40 hover:bg-gray-50">Next</button>
+                <button onClick={() => load(pagination.page - 1)} disabled={pagination.page <= 1}
+                  className="px-3 py-1 rounded border border-gray-200 dark:border-gray-700 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-800">Prev</button>
+                <button onClick={() => load(pagination.page + 1)} disabled={pagination.page >= pagination.total_pages}
+                  className="px-3 py-1 rounded border border-gray-200 dark:border-gray-700 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-800">Next</button>
               </div>
             </div>
           )}

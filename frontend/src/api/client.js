@@ -1,13 +1,58 @@
 const BASE = '/api'
+
+// Map common HTTP statuses to user-friendly messages. The original API `detail`
+// is preserved on `error.detail` for debugging / advanced UIs.
+const STATUS_MESSAGES = {
+  0:   'Cannot reach the server. Check that the backend is running.',
+  400: 'That request was invalid.',
+  401: 'You need to sign in to do that.',
+  403: 'You do not have permission to do that.',
+  404: 'We couldn’t find what you were looking for.',
+  408: 'The server took too long to respond. Please try again.',
+  409: 'That conflicts with the current state — refresh and retry.',
+  413: 'That upload is too large.',
+  429: 'Too many requests — slow down a moment and try again.',
+  500: 'Something went wrong on the server. Please try again.',
+  502: 'The server is unreachable right now. Please try again.',
+  503: 'The server is temporarily unavailable. Please try again shortly.',
+  504: 'The server timed out. Please try again.',
+}
+
+class ApiError extends Error {
+  constructor(message, { status = 0, detail = null, path = '' } = {}) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.detail = detail
+    this.path = path
+  }
+}
+
+function friendlyMessage(status, detail) {
+  // Prefer a friendly mapping by status; fall back to API detail or a generic line.
+  const mapped = STATUS_MESSAGES[status]
+  if (mapped) return mapped
+  if (typeof detail === 'string' && detail.length < 140) return detail
+  return `Something went wrong (status ${status}).`
+}
+
 async function request(path, options = {}) {
   const url = `${BASE}${path}`
-  const res = await fetch(url, { headers: { 'Content-Type': 'application/json', ...options.headers }, ...options })
+  let res
+  try {
+    res = await fetch(url, { headers: { 'Content-Type': 'application/json', ...options.headers }, ...options })
+  } catch (networkErr) {
+    throw new ApiError(STATUS_MESSAGES[0], { status: 0, detail: String(networkErr), path })
+  }
   if (!res.ok) {
-    const error = await res.json().catch(() => ({ detail: res.statusText }))
-    throw new Error(error.detail || `API error: ${res.status}`)
+    const body = await res.json().catch(() => ({}))
+    const detail = body?.detail ?? res.statusText ?? null
+    throw new ApiError(friendlyMessage(res.status, detail), { status: res.status, detail, path })
   }
   return res.json()
 }
+
+export { ApiError }
 export const api = {
   getStats: () => request('/stats'),
   getDashboard: () => request('/analytics/dashboard'),
