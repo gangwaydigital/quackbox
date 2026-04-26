@@ -56,6 +56,7 @@ def parse_mbox(mbox_path: Path, source_name: str = None) -> Generator[dict, None
         # Skip "From " separator line to get the actual message
         first_nl = raw_msg_bytes.find(b"\n")
         if first_nl == -1:
+            log.warning("%s: skipping malformed entry at offset %d (no newline after 'From ')", source, start)
             continue
         msg_bytes = raw_msg_bytes[first_nl + 1:]
 
@@ -65,7 +66,18 @@ def parse_mbox(mbox_path: Path, source_name: str = None) -> Generator[dict, None
             if record:
                 yield record
         except Exception as e:
-            log.warning("Error parsing message at offset %d: %s", start, e)
+            # Try to surface message-id and subject so the operator can locate the bad message
+            mid = subj = "?"
+            try:
+                mid = (msg.get("Message-ID") or "?").strip().strip("<>")[:120]
+                subj = (msg.get("Subject") or "")[:80]
+            except Exception:
+                pass
+            log.error(
+                "%s: failed to parse message at offset %d (size=%d, message_id=%s, subject=%r): %s",
+                source, start, end - start, mid, subj, e,
+                exc_info=True,
+            )
             continue
 
 

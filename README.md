@@ -35,9 +35,11 @@ QuackBox is a self-hosted email intelligence platform that transforms `.mbox` an
 
 ### Interface
 - **Sidebar Navigation** — Collapsible left sidebar, persistent state, notification badges for unconfigured features
-- **Dark Mode** — Full dark theme toggle
+- **Dark Mode** — Full dark theme toggle, with theme-aware Contacts directory and Threads list
 - **Keyboard Shortcuts** — Vim-style navigation (`g d`, `g e`, `g t`, `g c`, etc.)
 - **Setup Wizard** — First-run auto-detection with live import progress bar showing per-source counts and elapsed time
+- **Friendly Error Messages** — API failures surface user-readable messages (network down, server unavailable, not found) instead of raw HTTP details
+- **Empty States** — Icon-led, helpful empty states across Contacts and Threads (search vs. no-data hints)
 - **Export** — CSV export for emails, contacts, and threads; printable HTML thread export; single-email .eml export; attachment binary download from original source files
 - **Configurable Data Path** — Point `DATA_PATH` to any directory via `.env` instead of copying files
 
@@ -56,6 +58,12 @@ QuackBox is a self-hosted email intelligence platform that transforms `.mbox` an
 - **BM25 Ranked Search** — Column-weighted relevance scoring (subject 10×, sender 5×, body 1×) for better search results
 - **FTS5 Everywhere** — Advanced Search uses FTS5 instead of slow LIKE queries; instant search skips COUNT for speed
 - **Batch Semantic Lookups** — Similar/semantic search fetches all results in one query instead of N individual lookups
+- **SQL-Side Attachment Listing** — Attachment browser uses SQLite `json_each` to filter, sort, and paginate inside the database rather than loading every attachment-bearing email into memory
+
+### Reliability
+- **Diagnostic Parse Failures** — Mbox parser logs `Message-ID`, subject, file source, byte offset, and stack on parse errors instead of swallowing them as a one-line warning
+- **Validated Contact Merges** — Merging contacts now verifies every secondary address exists before any UPDATE, so an unknown address fails loudly instead of silently merging zero records
+- **Audited JSON Skips** — Email rows whose `attachment_names` JSON is malformed are surfaced in the logs (with a sample of offending email IDs) rather than dropped silently
 
 ---
 

@@ -29,24 +29,19 @@ def get_db(db_path: Path = DB_PATH):
 
 def init_db(db_path: Path = DB_PATH):
     with get_db(db_path) as conn:
-        # Check if raw_message column exists (for migration)
-        result = conn.execute(
-            "PRAGMA table_info(emails)"
-        ).fetchall()
-        column_names = [row[1] for row in result]
-
-        if "raw_message" not in column_names:
-            log.info("Adding raw_message column to emails table...")
-            conn.execute("""
-                ALTER TABLE emails ADD COLUMN raw_message BLOB
-            """)
-
         conn.execute("""CREATE TABLE IF NOT EXISTS emails (
             id INTEGER PRIMARY KEY AUTOINCREMENT, message_id TEXT UNIQUE, subject TEXT,
             sender_name TEXT, sender_email TEXT, recipients TEXT, date_sent TEXT,
             date_timestamp REAL, body_text TEXT, body_html TEXT, headers TEXT,
             mbox_source TEXT, thread_id TEXT, has_attachments BOOLEAN DEFAULT 0,
             attachment_names TEXT, raw_message BLOB, created_at TEXT DEFAULT (datetime('now')))""")
+
+        # Migration: add raw_message to pre-existing databases that don't have it.
+        # Safe to run after CREATE TABLE — only ALTERs if the column is missing.
+        existing_columns = {row[1] for row in conn.execute("PRAGMA table_info(emails)").fetchall()}
+        if "raw_message" not in existing_columns:
+            log.info("Adding raw_message column to emails table...")
+            conn.execute("ALTER TABLE emails ADD COLUMN raw_message BLOB")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_sender_email ON emails(sender_email)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_date_timestamp ON emails(date_timestamp DESC)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_date_sent ON emails(date_sent)")
