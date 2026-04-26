@@ -76,6 +76,7 @@ QuackBox is a self-hosted email intelligence platform that transforms `.mbox` an
 - **FTS5 Everywhere** — Advanced Search uses FTS5 instead of slow LIKE queries; instant search skips COUNT for speed
 - **Batch Semantic Lookups** — Similar/semantic search fetches all results in one query instead of N individual lookups
 - **SQL-Side Attachment Listing** — Attachment browser uses SQLite `json_each` to filter, sort, and paginate inside the database rather than loading every attachment-bearing email into memory
+- **Code-Split Frontend Bundle** — Route components are lazy-loaded with `React.lazy()`; recharts ships in its own chunk that downloads only on chart-bearing pages. Initial JS dropped from ~215 kB gzipped to ~72 kB (66% smaller), with each route on its own ~5–15 kB chunk
 
 ### Reliability
 - **Diagnostic Parse Failures** — Mbox parser logs `Message-ID`, subject, file source, byte offset, and stack on parse errors instead of swallowing them as a one-line warning

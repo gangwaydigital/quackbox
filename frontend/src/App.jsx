@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, createContext, useContext } from 'react'
+import { useState, useEffect, useRef, createContext, useContext, lazy, Suspense } from 'react'
 import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   Mail, Tags, BarChart3, MessageCircle, MessageSquare, Users, Moon, Sun,
@@ -7,24 +7,33 @@ import {
 } from 'lucide-react'
 import { api } from './api/client'
 import { useKeyboardShortcuts, ShortcutsHelp } from './hooks/useKeyboardShortcuts.jsx'
+
+// Eagerly loaded — these render on first paint or are tiny
 import SearchBar from './components/SearchBar'
 import EmailTable from './components/EmailTable'
-import EmailDetail from './components/EmailDetail'
 import FilterPanel from './components/FilterPanel'
-import TopicClusters from './components/TopicClusters'
-import Chat from './components/Chat'
-import Dashboard from './components/Dashboard'
-import { ThreadList, ThreadView } from './components/Threads'
-import { ContactList, ContactProfile } from './components/Contacts'
-import { MailboxList, MailboxDetail } from './components/Mailboxes'
-import CalendarView from './components/Calendar'
-import AttachmentIndex from './components/Attachments'
-import TimelineView from './components/Timeline'
-import SetupWizard from './components/SetupWizard'
-import AdvancedSearch from './components/AdvancedSearch'
 import EmailPane from './components/EmailPane'
-import Deduplication from './components/Deduplication'
+import SetupWizard from './components/SetupWizard'
 import ImportStatus from './components/ImportStatus'
+
+// Lazy-loaded — each route gets its own JS chunk that only downloads when
+// the user navigates to it. Heavy chart-bearing pages (Dashboard, Mailboxes,
+// Contacts profile) carry recharts; isolating them keeps initial load small.
+const Dashboard      = lazy(() => import('./components/Dashboard'))
+const EmailDetail    = lazy(() => import('./components/EmailDetail'))
+const TopicClusters  = lazy(() => import('./components/TopicClusters'))
+const Chat           = lazy(() => import('./components/Chat'))
+const CalendarView   = lazy(() => import('./components/Calendar'))
+const AttachmentIndex = lazy(() => import('./components/Attachments'))
+const TimelineView   = lazy(() => import('./components/Timeline'))
+const AdvancedSearch = lazy(() => import('./components/AdvancedSearch'))
+const Deduplication  = lazy(() => import('./components/Deduplication'))
+const ThreadList     = lazy(() => import('./components/Threads').then(m => ({ default: m.ThreadList })))
+const ThreadView     = lazy(() => import('./components/Threads').then(m => ({ default: m.ThreadView })))
+const ContactList    = lazy(() => import('./components/Contacts').then(m => ({ default: m.ContactList })))
+const ContactProfile = lazy(() => import('./components/Contacts').then(m => ({ default: m.ContactProfile })))
+const MailboxList    = lazy(() => import('./components/Mailboxes').then(m => ({ default: m.MailboxList })))
+const MailboxDetail  = lazy(() => import('./components/Mailboxes').then(m => ({ default: m.MailboxDetail })))
 
 const ThemeCtx = createContext()
 export const useTheme = () => useContext(ThemeCtx)
@@ -223,24 +232,26 @@ export default function App() {
         {/* ── Main Content ───────────────────────────────────────────────── */}
         <main className="flex-1 min-w-0 overflow-auto md:pt-0 pt-14 pb-16 md:pb-0">
           <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6">
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/emails" element={<EmailsPage />} />
-              <Route path="/email/:id" element={<EmailDetail />} />
-              <Route path="/calendar" element={<CalendarView />} />
-              <Route path="/timeline" element={<TimelineView />} />
-              <Route path="/search" element={<AdvancedSearch />} />
-              <Route path="/threads" element={<ThreadList />} />
-              <Route path="/thread/:id" element={<ThreadView />} />
-              <Route path="/contacts" element={<ContactList />} />
-              <Route path="/contact/:email" element={<ContactProfile />} />
-              <Route path="/mailboxes" element={<MailboxList />} />
-              <Route path="/mailbox/:name" element={<MailboxDetail />} />
-              <Route path="/attachments" element={<AttachmentIndex />} />
-              <Route path="/duplicates" element={<Deduplication />} />
-              <Route path="/topics" element={<TopicClusters />} />
-              <Route path="/chat" element={<Chat />} />
-            </Routes>
+            <Suspense fallback={<RouteFallback />}>
+              <Routes>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/emails" element={<EmailsPage />} />
+                <Route path="/email/:id" element={<EmailDetail />} />
+                <Route path="/calendar" element={<CalendarView />} />
+                <Route path="/timeline" element={<TimelineView />} />
+                <Route path="/search" element={<AdvancedSearch />} />
+                <Route path="/threads" element={<ThreadList />} />
+                <Route path="/thread/:id" element={<ThreadView />} />
+                <Route path="/contacts" element={<ContactList />} />
+                <Route path="/contact/:email" element={<ContactProfile />} />
+                <Route path="/mailboxes" element={<MailboxList />} />
+                <Route path="/mailbox/:name" element={<MailboxDetail />} />
+                <Route path="/attachments" element={<AttachmentIndex />} />
+                <Route path="/duplicates" element={<Deduplication />} />
+                <Route path="/topics" element={<TopicClusters />} />
+                <Route path="/chat" element={<Chat />} />
+              </Routes>
+            </Suspense>
           </div>
         </main>
 
@@ -269,6 +280,14 @@ export default function App() {
         {showShortcuts && <ShortcutsHelp onClose={() => setShowShortcuts(false)} />}
       </div>
     </ThemeProvider>
+  )
+}
+
+function RouteFallback() {
+  return (
+    <div className="flex items-center justify-center py-24 text-gray-400">
+      <div className="w-5 h-5 border-2 border-gray-200 dark:border-gray-700 border-t-blue-500 rounded-full animate-spin" />
+    </div>
   )
 }
 
