@@ -3,7 +3,7 @@ import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   Mail, Tags, BarChart3, MessageCircle, MessageSquare, Users, Moon, Sun,
   Menu, X, Layers, Command, Calendar, CalendarClock, Paperclip, Clock, Filter,
-  ChevronLeft, Copy
+  ChevronLeft, Copy, Share2
 } from 'lucide-react'
 import { api } from './api/client'
 import { useKeyboardShortcuts, ShortcutsHelp } from './hooks/useKeyboardShortcuts.jsx'
@@ -29,6 +29,7 @@ const TimelineView   = lazy(() => import('./components/Timeline'))
 const AdvancedSearch = lazy(() => import('./components/AdvancedSearch'))
 const Deduplication  = lazy(() => import('./components/Deduplication'))
 const Events         = lazy(() => import('./components/Events'))
+const ContactNetwork = lazy(() => import('./components/ContactNetwork'))
 const ThreadList     = lazy(() => import('./components/Threads').then(m => ({ default: m.ThreadList })))
 const ThreadView     = lazy(() => import('./components/Threads').then(m => ({ default: m.ThreadView })))
 const ContactList    = lazy(() => import('./components/Contacts').then(m => ({ default: m.ContactList })))
@@ -88,6 +89,7 @@ export default function App() {
     { path: '/timeline', icon: Clock, label: 'Timeline' },
     { path: '/threads', icon: MessageSquare, label: 'Threads', badge: badges?.needs_threads },
     { path: '/contacts', icon: Users, label: 'Contacts' },
+    { path: '/network', icon: Share2, label: 'Network' },
     { path: '/mailboxes', icon: Layers, label: 'Mailboxes' },
     { path: '/attachments', icon: Paperclip, label: 'Files' },
     { path: '/duplicates', icon: Copy, label: 'Duplicates' },
@@ -247,6 +249,7 @@ export default function App() {
                 <Route path="/thread/:id" element={<ThreadView />} />
                 <Route path="/contacts" element={<ContactList />} />
                 <Route path="/contact/:email" element={<ContactProfile />} />
+                <Route path="/network" element={<ContactNetwork />} />
                 <Route path="/mailboxes" element={<MailboxList />} />
                 <Route path="/mailbox/:name" element={<MailboxDetail />} />
                 <Route path="/attachments" element={<AttachmentIndex />} />
