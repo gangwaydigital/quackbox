@@ -81,6 +81,8 @@ export const api = {
   getClusteringStatus: () => request('/topics/status'),
   cancelClustering: () => request('/topics/cancel', { method: 'POST' }),
   scanData: () => request('/ingest/scan'),
+  getWatcherStatus: () => request('/ingest/watcher'),
+  triggerWatcherScan: () => request('/ingest/watcher/scan', { method: 'POST' }),
   checkIngest: () => request('/ingest/check'),
   startIngest: (force = false) => request(`/ingest/start?force=${force}`, { method: 'POST' }),
   getIngestProgress: () => request('/ingest/progress'),

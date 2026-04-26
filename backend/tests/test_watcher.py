@@ -98,6 +98,33 @@ class TestWatcherTickBehavior:
         assert watcher.status()["runs"] >= 1
 
 
+class TestTriggerScanNow:
+    def test_skips_when_ingest_already_running(self):
+        with patch("app.services.watcher.is_ingest_running", return_value=True), \
+             patch("app.services.watcher._has_pending_work", return_value=True):
+            result = watcher.trigger_scan_now()
+        assert result == {"queued": False, "reason": "ingest_already_running"}
+
+    def test_no_op_when_nothing_new(self):
+        with patch("app.services.watcher.is_ingest_running", return_value=False), \
+             patch("app.services.watcher._has_pending_work", return_value=False):
+            result = watcher.trigger_scan_now()
+        assert result == {"queued": False, "reason": "no_new_content"}
+        assert "nothing new" in watcher.status()["last_status_summary"].lower()
+
+    def test_queues_ingest_when_pending_work(self):
+        with patch("app.services.watcher.is_ingest_running", return_value=False), \
+             patch("app.services.watcher._has_pending_work", return_value=True), \
+             patch("app.services.watcher._executor.submit") as mock_submit:
+            result = watcher.trigger_scan_now()
+        assert result == {"queued": True, "reason": "ingest_started"}
+        # Should have submitted run_ingest with incremental=True, triggered_by="watcher-manual"
+        mock_submit.assert_called_once()
+        args = mock_submit.call_args.args
+        assert args[1] is True  # incremental
+        assert args[2] == "watcher-manual"
+
+
 class TestHasPendingWork:
     def test_true_when_any_source_is_new_or_updated(self):
         with patch(

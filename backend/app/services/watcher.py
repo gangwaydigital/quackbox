@@ -138,6 +138,32 @@ async def _run_once_now() -> None:
         log.exception("Watcher startup scan failed")
 
 
+def trigger_scan_now() -> dict:
+    """
+    Run an immediate scan + ingest pass synchronously on a worker thread.
+    Returns a status dict describing what happened (queued / nothing-to-do /
+    already-running / disabled).
+
+    Called by the manual /api/ingest/watcher/scan endpoint so users can force
+    a scan without waiting for the next tick.
+    """
+    if is_ingest_running():
+        return {"queued": False, "reason": "ingest_already_running"}
+    if not _has_pending_work():
+        _state["last_check_at"] = time.time()
+        _state["checks"] += 1
+        _state["last_status_summary"] = "Manual scan: nothing new"
+        return {"queued": False, "reason": "no_new_content"}
+    log.info("🔭 Watcher: manual scan triggered, dispatching incremental ingest")
+    _state["last_run_at"] = time.time()
+    _state["runs"] += 1
+    _state["last_status_summary"] = "Manual scan triggered ingest"
+    # Fire and forget — the executor runs the ingest, the user polls
+    # /api/ingest/progress for results.
+    _executor.submit(run_ingest, True, "watcher-manual")
+    return {"queued": True, "reason": "ingest_started"}
+
+
 async def stop() -> None:
     """Cancel the watcher task. Safe to call even if never started."""
     global _task, _stop_event

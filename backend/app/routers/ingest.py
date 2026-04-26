@@ -101,6 +101,16 @@ async def watcher_status():
     return watcher.status()
 
 
+@router.post("/watcher/scan")
+async def watcher_scan_now():
+    """
+    Force an immediate watcher scan + ingest if there's anything new on disk.
+    Useful when WATCH_INTERVAL_MINUTES is long but the user wants to pick up
+    new mail right now.
+    """
+    return watcher.trigger_scan_now()
+
+
 @router.post("", response_model=IngestResponse)
 async def ingest_mbox_file(request: IngestRequest):
     mbox_path = DATA_DIR / request.mbox_path
