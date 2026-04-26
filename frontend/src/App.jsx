@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, createContext, useContext, lazy, Suspense 
 import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   Mail, Tags, BarChart3, MessageCircle, MessageSquare, Users, Moon, Sun,
-  Menu, X, Layers, Command, Calendar, Paperclip, Clock, Filter,
+  Menu, X, Layers, Command, Calendar, CalendarClock, Paperclip, Clock, Filter,
   ChevronLeft, Copy
 } from 'lucide-react'
 import { api } from './api/client'
@@ -28,6 +28,7 @@ const AttachmentIndex = lazy(() => import('./components/Attachments'))
 const TimelineView   = lazy(() => import('./components/Timeline'))
 const AdvancedSearch = lazy(() => import('./components/AdvancedSearch'))
 const Deduplication  = lazy(() => import('./components/Deduplication'))
+const Events         = lazy(() => import('./components/Events'))
 const ThreadList     = lazy(() => import('./components/Threads').then(m => ({ default: m.ThreadList })))
 const ThreadView     = lazy(() => import('./components/Threads').then(m => ({ default: m.ThreadView })))
 const ContactList    = lazy(() => import('./components/Contacts').then(m => ({ default: m.ContactList })))
@@ -83,6 +84,7 @@ export default function App() {
     { path: '/emails', icon: Mail, label: 'Emails' },
     { path: '/search', icon: Filter, label: 'Search' },
     { path: '/calendar', icon: Calendar, label: 'Calendar' },
+    { path: '/events', icon: CalendarClock, label: 'Events' },
     { path: '/timeline', icon: Clock, label: 'Timeline' },
     { path: '/threads', icon: MessageSquare, label: 'Threads', badge: badges?.needs_threads },
     { path: '/contacts', icon: Users, label: 'Contacts' },
@@ -238,6 +240,7 @@ export default function App() {
                 <Route path="/emails" element={<EmailsPage />} />
                 <Route path="/email/:id" element={<EmailDetail />} />
                 <Route path="/calendar" element={<CalendarView />} />
+                <Route path="/events" element={<Events />} />
                 <Route path="/timeline" element={<TimelineView />} />
                 <Route path="/search" element={<AdvancedSearch />} />
                 <Route path="/threads" element={<ThreadList />} />

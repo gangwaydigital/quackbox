@@ -152,4 +152,9 @@ export const api = {
   getAttachmentPreview: (emailId, filename) => request(`/attachments/${emailId}/${encodeURIComponent(filename)}/preview`),
   searchAttachmentContent: (q, page = 1) => request(`/attachments/search/content?q=${encodeURIComponent(q)}&page=${page}`),
   triggerAttachmentIndexing: () => request('/attachments/index', { method: 'POST' }),
+  // Calendar events
+  getCalendarEvents: (params = {}) => { const q = new URLSearchParams(); Object.entries(params).forEach(([k, v]) => { if (v != null && v !== '') q.set(k, v) }); return request(`/calendar-events?${q}`) },
+  getCalendarEventStats: () => request('/calendar-events/stats'),
+  triggerCalendarIndexing: () => request('/calendar-events/index', { method: 'POST' }),
+  getCalendarIndexStatus: () => request('/calendar-events/status'),
 }
