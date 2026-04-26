@@ -100,6 +100,72 @@ class TestMakeTopicLabel:
         assert clustering._make_topic_label(["project"]) == "Project"
 
 
+class TestCancellation:
+    def test_request_cancel_sets_flag(self):
+        clustering.reset_cancel()
+        assert clustering.is_cancel_requested() is False
+        clustering.request_cancel()
+        assert clustering.is_cancel_requested() is True
+        clustering.reset_cancel()
+        assert clustering.is_cancel_requested() is False
+
+    def test_embedding_loop_stops_when_cancel_requested(self, tmp_path, monkeypatch):
+        """When the cancel flag is set, the loop bails after the current batch
+        and reports cancelled=True with embeddings already generated preserved."""
+        from app import database
+        db_path = tmp_path / "cancel.db"
+        database.init_db(db_path)
+        real_get_db = database.get_db
+
+        def get_db_override(p=db_path):
+            return real_get_db(p)
+        monkeypatch.setattr(clustering, "get_db", get_db_override)
+
+        # Seed 10 emails
+        with database.get_db(db_path) as conn:
+            for i in range(10):
+                conn.execute(
+                    "INSERT INTO emails (subject, sender_name, body_text) VALUES (?, ?, ?)",
+                    (f"Subject {i}", "alice@x.com", f"body {i}"),
+                )
+
+        # Set the cancel flag BEFORE running. Loop should bail immediately.
+        clustering.reset_cancel()
+        clustering.request_cancel()
+        with patch.object(clustering, "generate_embedding", return_value=[0.1] * 768):
+            result = clustering.generate_all_embeddings(batch_size=2)
+        clustering.reset_cancel()  # cleanup
+
+        assert result["cancelled"] is True
+        assert result["generated"] == 0  # bailed before any work
+        assert result["total"] == 10
+
+    def test_embedding_loop_completes_when_no_cancel(self, tmp_path, monkeypatch):
+        """Sanity: without a cancel signal, the loop runs to completion and
+        reports cancelled=False."""
+        from app import database
+        db_path = tmp_path / "nocancel.db"
+        database.init_db(db_path)
+        real_get_db = database.get_db
+
+        def get_db_override(p=db_path):
+            return real_get_db(p)
+        monkeypatch.setattr(clustering, "get_db", get_db_override)
+
+        with database.get_db(db_path) as conn:
+            for i in range(3):
+                conn.execute(
+                    "INSERT INTO emails (subject, sender_name, body_text) VALUES (?, ?, ?)",
+                    (f"S {i}", "a@x.com", f"b {i}"),
+                )
+
+        clustering.reset_cancel()
+        with patch.object(clustering, "generate_embedding", return_value=[0.1] * 768):
+            result = clustering.generate_all_embeddings(batch_size=1)
+        assert result["cancelled"] is False
+        assert result["generated"] == 3
+
+
 class TestGenerateAllEmbeddingsProgressCallback:
     """Verify the progress_callback hook fires correctly without breaking the loop."""
 
