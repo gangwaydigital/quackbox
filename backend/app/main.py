@@ -7,7 +7,7 @@ from app.logging_config import setup_logging
 from app.routers import emails, topics, ingest, chat, threads, analytics, contacts, export, attachments, bookmarks, settings, deduplication, saved_searches, calendar, folders
 from app.services import watcher
 
-APP_VERSION = "4.4.0"
+APP_VERSION = "4.5.0"
 
 log = setup_logging()
 
