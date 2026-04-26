@@ -13,6 +13,7 @@ import { RefreshCw, CheckCircle, AlertCircle, Clock, Database,
          Eye, EyeOff } from 'lucide-react'
 import { api } from '../api/client'
 import { OnboardingBanner } from './OnboardingTips'
+import FoldersManager from './FoldersManager'
 
 const STATUS_CONFIG = {
   new:       { label: 'New source',   color: 'text-blue-600',  bg: 'bg-blue-50  border-blue-200',  icon: Inbox },
@@ -430,6 +431,9 @@ export default function ImportStatus({ compact = false }) {
         new emails — unchanged sources are skipped instantly. Use <em>Full re-scan</em> only if
         you've manually moved or replaced source files.
       </OnboardingBanner>
+
+      {/* Registered folders */}
+      <FoldersManager />
 
       {/* Auto-import watcher status */}
       <WatcherPanel disabled={isRunning} />

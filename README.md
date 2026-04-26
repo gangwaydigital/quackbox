@@ -136,6 +136,10 @@ echo "DATA_PATH=/Users/you/Library/Mail/V10" > .env
 
 Any path works — external drives, Google Takeout folders, Thunderbird profiles, etc. For backup directories you never want QuackBox to write to, also set `DATA_MOUNT_MODE=ro` in `.env` for a read-only bind mount.
 
+**Option C** — Pick folders from inside the app:
+
+The setup wizard (first run with no email data) and the Mailboxes page both have a folder picker that browses your filesystem. Folders you add this way persist and are scanned on every import. The container needs read access to the host paths you want to browse — by default `/Users` and `/Volumes` are mounted read-only inside the container; edit `docker-compose.yml` if you want to expose more or restrict that access.
+
 ### 2. (Optional) Start Ollama
 
 ```bash

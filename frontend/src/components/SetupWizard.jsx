@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react'
-import { Mail, FolderSearch, Play, CheckCircle, AlertCircle, Loader, Archive, Inbox, Clock } from 'lucide-react'
+import { Mail, FolderSearch, FolderPlus, Play, CheckCircle, AlertCircle, Loader, Archive, Inbox, Clock } from 'lucide-react'
 import { api } from '../api/client'
+import FolderPicker from './FolderPicker'
 
 export default function SetupWizard({ onComplete }) {
   const [phase, setPhase] = useState('scanning')
   const [scanResult, setScanResult] = useState(null)
   const [progress, setProgress] = useState(null)
+  const [showPicker, setShowPicker] = useState(false)
+  const [pickError, setPickError] = useState(null)
 
   useEffect(() => {
     api.scanData().then(data => {
@@ -31,6 +34,26 @@ export default function SetupWizard({ onComplete }) {
 
   const fmtTime = (s) => s >= 60 ? `${Math.floor(s/60)}m ${s%60}s` : `${s}s`
 
+  const rescan = () => {
+    setPhase('scanning')
+    api.scanData().then(d => {
+      setScanResult(d)
+      setPhase(d.total_files > 0 ? 'ready' : 'empty')
+    })
+  }
+
+  const handlePickFolder = async (host_path) => {
+    if (!host_path) return
+    setPickError(null)
+    try {
+      await api.addIngestFolder(host_path)
+      setShowPicker(false)
+      rescan()
+    } catch (err) {
+      setPickError(String(err.message || err))
+    }
+  }
+
   return (
     <div className="max-w-2xl mx-auto py-12">
       <div className="text-center mb-8">
@@ -49,26 +72,50 @@ export default function SetupWizard({ onComplete }) {
       )}
 
       {phase === 'empty' && (
-        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-8">
-          <div className="text-center mb-6">
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-8 space-y-5">
+          <div className="text-center">
             <FolderSearch className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
             <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200">No Email Data Found</h2>
-            <p className="text-sm text-gray-500 mt-1">Place your email files in the data directory and refresh.</p>
+            <p className="text-sm text-gray-500 mt-1">Pick a folder on your computer that contains email files.</p>
           </div>
+
+          <button onClick={() => { setPickError(null); setShowPicker(true) }}
+            className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium">
+            <FolderPlus className="w-4 h-4" />
+            Choose a folder…
+          </button>
+
+          {pickError && (
+            <div className="flex items-start gap-2 px-3 py-2 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700/50 rounded-lg text-xs text-red-700 dark:text-red-300">
+              <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+              <div>{pickError}</div>
+            </div>
+          )}
+
           <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 text-sm space-y-2">
             <p className="font-medium text-gray-700 dark:text-gray-300">Supported formats:</p>
             <div className="text-gray-500 space-y-1">
-              <p>Apple Mail .emlx — Copy your V10 mailbox folder</p>
-              <p>.mbox files — Standard mbox format (Google Takeout, Thunderbird)</p>
-              <p>Apple Mail bundles — .mbox folders with nested mbox files</p>
+              <p>Apple Mail <code className="font-mono">.emlx</code> — pick your <code className="font-mono">~/Library/Mail/V10</code> folder</p>
+              <p>Standard <code className="font-mono">.mbox</code> files (Google Takeout, Thunderbird)</p>
+              <p>Apple Mail bundles — <code className="font-mono">.mbox</code> folders with nested <code className="font-mono">mbox</code> files</p>
             </div>
-            <p className="text-gray-500 mt-3">Data directory: <code className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded text-xs">{scanResult?.data_dir || '/app/data'}</code></p>
+            <p className="text-gray-500 mt-3 text-xs">
+              Or drop files into <code className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">{scanResult?.data_dir || '/app/data'}</code> and click Scan Again.
+            </p>
           </div>
-          <button onClick={() => { setPhase('scanning'); api.scanData().then(d => { setScanResult(d); setPhase(d.total_files > 0 ? 'ready' : 'empty') }) }}
-            className="w-full mt-4 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium">
+
+          <button onClick={rescan}
+            className="w-full px-4 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 text-sm font-medium">
             Scan Again
           </button>
         </div>
+      )}
+
+      {showPicker && (
+        <FolderPicker
+          onPick={handlePickFolder}
+          onClose={() => setShowPicker(false)}
+        />
       )}
 
       {phase === 'ready' && scanResult && (
