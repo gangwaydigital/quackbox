@@ -41,3 +41,9 @@ MAX_PAGE_SIZE = 200
 # -- Parsing --
 SUPPORTED_EXTENSIONS = {".mbox", ".mbox.gz"}
 MAX_BODY_LENGTH = 100_000
+
+# -- Watcher --
+# Background ingest scheduler. 0 disables (default). Minimum effective
+# interval is 1 minute when enabled.
+WATCH_INTERVAL_MINUTES = int(os.environ.get("WATCH_INTERVAL_MINUTES", "0"))
+WATCH_ON_STARTUP = os.environ.get("WATCH_ON_STARTUP", "false").lower() in ("1", "true", "yes")

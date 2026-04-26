@@ -44,6 +44,12 @@ QuackBox is a self-hosted email intelligence platform that transforms `.mbox` an
 - **Accessible Modals** — Attachment preview modal traps focus, closes on Escape, restores focus on close, locks background scroll, and is announced with `role="dialog"` + `aria-labelledby`
 - **Export** — CSV export for emails, contacts, and threads; printable HTML thread export; single-email .eml export; attachment binary download from original source files
 - **Configurable Data Path** — Point `DATA_PATH` to any directory via `.env` instead of copying files
+- **Auto Re-Import (Watcher)** — Set `WATCH_INTERVAL_MINUTES=15` in `.env` to have the backend periodically scan `DATA_PATH` and incrementally ingest any new email content. Status visible at `/api/ingest/watcher`
+
+### v4.3.0 What's New
+- **Background watcher** — when `WATCH_INTERVAL_MINUTES` is set, the backend periodically scans `DATA_PATH` and runs an incremental ingest whenever new mail arrives. No-op when the disk is unchanged. Optional `WATCH_ON_STARTUP=true` triggers an immediate scan on boot. Status visible at `/api/ingest/watcher`
+- **Refactored ingest runner** — the ingest worker + status are now in `app/services/ingest_runner.py`, shared between the manual `/api/ingest/start` endpoint and the watcher
+- **Watcher tests** — `backend/tests/test_watcher.py` covers the disabled path, lifecycle, tick behavior (skip while running, no-op on no work, dispatch on pending work), and `_has_pending_work` exception safety
 
 ### v4.2.0 What's New
 - **Apple Mail (.emlx) attachments now download correctly** — earlier builds stored the full `.emlx` file (byte-count prefix + plist trailer) as the raw message, breaking attachment extraction and `.eml` export for every signed/multipart email. Fixed with a one-time idempotent startup migration that repairs existing rows

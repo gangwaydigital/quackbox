@@ -46,6 +46,9 @@ services:
       - EMBED_MODEL=nomic-embed-text
       - EMBED_API_TYPE=ollama
       - EMBEDDING_DIMENSIONS=768
+      # --- Background watcher (auto re-import) ---
+      - WATCH_INTERVAL_MINUTES=${WATCH_INTERVAL_MINUTES:-0}
+      - WATCH_ON_STARTUP=${WATCH_ON_STARTUP:-false}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
