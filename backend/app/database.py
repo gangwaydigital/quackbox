@@ -209,6 +209,21 @@ def init_db(db_path: Path = DB_PATH):
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_emlx_source ON ingest_emlx_files(source_name)")
 
+        # -- User-registered ingest folders (in addition to legacy DATA_DIR) --
+        # host_path is what the user sees ("/Users/duck/Library/Mail/V10");
+        # container_path is the same path mapped through the /host bind mount
+        # ("/host/Users/duck/Library/Mail/V10"). Storing both lets us show the
+        # human-friendly path in UI while ingesting the in-container one.
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS ingest_folders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                label TEXT NOT NULL,
+                host_path TEXT NOT NULL UNIQUE,
+                container_path TEXT NOT NULL,
+                added_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
+
         # -- Calendar events extracted from text/calendar parts and .ics attachments --
         conn.execute("""
             CREATE TABLE IF NOT EXISTS calendar_events (

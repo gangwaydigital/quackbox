@@ -126,23 +126,41 @@ class TestTriggerScanNow:
 
 
 class TestHasPendingWork:
+    """_has_pending_work iterates all_data_paths() and short-circuits on the
+    first 'new'/'updated' source. We mock all_data_paths to avoid hitting
+    the real DB, then control get_source_status separately."""
+
+    @staticmethod
+    def _patches(*, paths=("/tmp",), source_status=None, source_status_exc=None):
+        from pathlib import Path
+        path_patch = patch(
+            "app.services.watcher.all_data_paths",
+            return_value=[Path(p) for p in paths],
+        )
+        if source_status_exc:
+            ss_patch = patch(
+                "app.services.watcher.get_source_status",
+                side_effect=source_status_exc,
+            )
+        else:
+            ss_patch = patch(
+                "app.services.watcher.get_source_status",
+                return_value=source_status or [],
+            )
+        return path_patch, ss_patch
+
     def test_true_when_any_source_is_new_or_updated(self):
-        with patch(
-            "app.services.watcher.get_source_status",
-            return_value=[{"status": "unchanged"}, {"status": "new"}],
-        ):
+        p, s = self._patches(source_status=[{"status": "unchanged"}, {"status": "new"}])
+        with p, s:
             assert watcher._has_pending_work() is True
 
     def test_false_when_all_unchanged(self):
-        with patch(
-            "app.services.watcher.get_source_status",
-            return_value=[{"status": "unchanged"}, {"status": "unchanged"}],
-        ):
+        p, s = self._patches(source_status=[{"status": "unchanged"}, {"status": "unchanged"}])
+        with p, s:
             assert watcher._has_pending_work() is False
 
     def test_swallows_exceptions(self):
         """get_source_status failure should not crash the watcher loop."""
-        with patch(
-            "app.services.watcher.get_source_status", side_effect=RuntimeError("db down")
-        ):
+        p, s = self._patches(source_status_exc=RuntimeError("db down"))
+        with p, s:
             assert watcher._has_pending_work() is False

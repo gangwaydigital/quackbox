@@ -20,6 +20,7 @@ from app.config import DATA_DIR, WATCH_INTERVAL_MINUTES, WATCH_ON_STARTUP
 from app.logging_config import get_logger
 from app.services.indexer import get_source_status
 from app.services.ingest_runner import is_ingest_running, run_ingest
+from app.services.folders import all_data_paths
 
 log = get_logger("watcher")
 
@@ -45,13 +46,17 @@ def status() -> dict:
 
 
 def _has_pending_work() -> bool:
-    """Return True if any source on disk is new or updated since last ingest."""
+    """Return True if any source on disk is new or updated since last ingest.
+    Checks every registered folder + the legacy DATA_DIR."""
     try:
-        sources = get_source_status(DATA_DIR)
+        for path in all_data_paths():
+            sources = get_source_status(path)
+            if any(s.get("status") in ("new", "updated") for s in sources):
+                return True
     except Exception as e:
         log.warning("Watcher: get_source_status failed: %s", e)
         return False
-    return any(s.get("status") in ("new", "updated") for s in sources)
+    return False
 
 
 async def _watch_loop(interval_seconds: int) -> None:

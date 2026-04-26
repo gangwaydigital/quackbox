@@ -84,6 +84,15 @@ export const api = {
   scanData: () => request('/ingest/scan'),
   getWatcherStatus: () => request('/ingest/watcher'),
   triggerWatcherScan: () => request('/ingest/watcher/scan', { method: 'POST' }),
+  // Folder picker / registered ingest folders
+  browseFolders: (path) => {
+    const q = new URLSearchParams()
+    if (path) q.set('path', path)
+    return request(`/folders/browse${q.toString() ? `?${q}` : ''}`)
+  },
+  listIngestFolders: () => request('/folders'),
+  addIngestFolder: (host_path, label) => request('/folders', { method: 'POST', body: JSON.stringify({ host_path, label }) }),
+  removeIngestFolder: (id) => request(`/folders/${id}`, { method: 'DELETE' }),
   checkIngest: () => request('/ingest/check'),
   startIngest: (force = false) => request(`/ingest/start?force=${force}`, { method: 'POST' }),
   getIngestProgress: () => request('/ingest/progress'),

@@ -33,15 +33,26 @@ _offset_cache: dict[str, dict[str, int]] = {}
 
 @functools.lru_cache(maxsize=8)
 def _discover_mbox_files() -> list[Path]:
-    """Find all mbox files in DATA_DIR (cached)."""
-    files = []
-    for f in DATA_DIR.rglob("*.mbox"):
-        if f.is_file() and f.stat().st_size > 0:
-            files.append(f)
-    for f in DATA_DIR.rglob("mbox"):
-        if f.is_file() and f.stat().st_size > 0 and f not in files:
-            files.append(f)
+    """Find all mbox files across DATA_DIR + every registered ingest folder
+    (cached). Cache is invalidated when folders are added/removed by callers
+    that import _invalidate_mbox_cache."""
+    from app.services.folders import all_data_paths
+
+    files: list[Path] = []
+    for root in all_data_paths():
+        for f in root.rglob("*.mbox"):
+            if f.is_file() and f.stat().st_size > 0:
+                files.append(f)
+        for f in root.rglob("mbox"):
+            if f.is_file() and f.stat().st_size > 0 and f not in files:
+                files.append(f)
     return files
+
+
+def _invalidate_mbox_cache() -> None:
+    """Drop the cached mbox-file list. Called after add/remove of an
+    ingest folder so subsequent attachment downloads see the new path."""
+    _discover_mbox_files.cache_clear()
 
 
 def _find_source_files(mbox_source: str) -> list[Path]:
@@ -149,28 +160,31 @@ def _find_message_fast(message_id: str, mbox_source: str):
 
 
 def _find_emlx_message(message_id: str) -> Optional[object]:
-    """Search .emlx files for a matching Message-ID. Slower fallback."""
-    for emlx_path in DATA_DIR.rglob("*.emlx"):
-        if ".partial." in emlx_path.name:
-            continue
-        try:
-            raw = emlx_path.read_bytes()
-            # Quick check: is the message-id even in this file?
-            if message_id.encode('ascii', errors='replace') not in raw:
-                continue
+    """Search .emlx files for a matching Message-ID. Slower fallback.
+    Walks every registered ingest folder + DATA_DIR."""
+    from app.services.folders import all_data_paths
 
-            first_nl = raw.index(b"\n")
+    needle = message_id.encode('ascii', errors='replace')
+    for root in all_data_paths():
+        for emlx_path in root.rglob("*.emlx"):
+            if ".partial." in emlx_path.name:
+                continue
             try:
-                byte_count = int(raw[:first_nl].strip())
-                msg_bytes = raw[first_nl + 1: first_nl + 1 + byte_count]
-            except ValueError:
-                msg_bytes = raw
-            msg = email.message_from_bytes(msg_bytes, policy=policy.compat32)
-            mid = (msg.get("Message-ID") or "").strip().strip("<>")
-            if mid == message_id:
-                return msg
-        except Exception:
-            continue
+                raw = emlx_path.read_bytes()
+                if needle not in raw:
+                    continue
+                first_nl = raw.index(b"\n")
+                try:
+                    byte_count = int(raw[:first_nl].strip())
+                    msg_bytes = raw[first_nl + 1: first_nl + 1 + byte_count]
+                except ValueError:
+                    msg_bytes = raw
+                msg = email.message_from_bytes(msg_bytes, policy=policy.compat32)
+                mid = (msg.get("Message-ID") or "").strip().strip("<>")
+                if mid == message_id:
+                    return msg
+            except Exception:
+                continue
     return None
 
 

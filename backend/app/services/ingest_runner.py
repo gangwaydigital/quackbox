@@ -14,6 +14,7 @@ from app.config import DATA_DIR
 from app.logging_config import get_logger
 from app.services.indexer import ingest_mbox, ingest_emlx_mailbox
 from app.services.emlx_parser import find_emlx_files
+from app.services.folders import all_data_paths
 
 log = get_logger("ingest_runner")
 
@@ -67,29 +68,45 @@ def run_ingest(incremental: bool = True, triggered_by: str = "manual") -> dict:
             "triggered_by": triggered_by,
         })
 
-        mailboxes = find_emlx_files(DATA_DIR)
-        mbox_files = _discover_mbox_files(DATA_DIR)
+        # Scan every registered folder + the legacy DATA_DIR. A new folder
+        # added via the in-app picker is just another path in this list.
+        scan_paths = all_data_paths()
 
-        total_sources = len(mailboxes or {}) + len(mbox_files)
+        all_mailboxes: dict = {}
+        all_mbox_files: set[str] = set()
+        for path in scan_paths:
+            for name, files in (find_emlx_files(path) or {}).items():
+                if name in all_mailboxes:
+                    # Merge across roots so duplicate mailbox names from
+                    # different folders don't clobber each other.
+                    existing_paths = {str(f) for f in all_mailboxes[name]}
+                    for f in files:
+                        if str(f) not in existing_paths:
+                            all_mailboxes[name].append(f)
+                else:
+                    all_mailboxes[name] = list(files)
+            all_mbox_files.update(_discover_mbox_files(path))
+
+        total_sources = len(all_mailboxes) + len(all_mbox_files)
         INGEST_STATUS["files_total"] = total_sources
         INGEST_STATUS["phase"] = "importing"
 
         results = []
 
-        if mailboxes:
-            for mailbox_name in sorted(mailboxes.keys()):
+        if all_mailboxes:
+            for mailbox_name in sorted(all_mailboxes.keys()):
                 INGEST_STATUS["current_source"] = mailbox_name
                 INGEST_STATUS["progress"] = f"Importing {mailbox_name}..."
                 INGEST_STATUS["elapsed_seconds"] = round(time.time() - start_time)
 
                 result = ingest_emlx_mailbox(
-                    mailbox_name, mailboxes[mailbox_name], incremental=incremental
+                    mailbox_name, all_mailboxes[mailbox_name], incremental=incremental
                 )
                 results.append(result)
                 _record_source_result(mailbox_name, result)
 
-        if mbox_files:
-            for mbox_path_str in sorted(mbox_files):
+        if all_mbox_files:
+            for mbox_path_str in sorted(all_mbox_files):
                 mbox_path = Path(mbox_path_str)
                 name = mbox_path.parent.name if mbox_path.name == "mbox" else mbox_path.name
                 INGEST_STATUS["current_source"] = name

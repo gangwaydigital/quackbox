@@ -32,6 +32,13 @@ services:
       - ./backend/app:/app/app
       - ${DATA_PATH:-./data}:/app/data:${DATA_MOUNT_MODE:-rw}
       - db-data:/app/db
+      # Read-only host mounts so the in-app folder picker can browse for
+      # additional mailbox sources beyond DATA_PATH. The container sees them
+      # under /host/Users and /host/Volumes; mac users get both the home
+      # directory tree and any external/network volumes. To restrict, comment
+      # one out — to broaden, add additional :ro mounts.
+      - /Users:/host/Users:ro
+      - /Volumes:/host/Volumes:ro
     environment:
       - DATA_DIR=/app/data
       - DB_DIR=/app/db
