@@ -27,7 +27,7 @@ async def merge(req: MergeRequest):
     """Merge duplicate contacts. WARNING: This modifies the database."""
     result = merge_contacts(req.primary_email, req.secondary_emails)
     if result.get("error"):
-        raise HTTPException(400, result["error"])
+        raise HTTPException(result.get("status", 400), result["error"])
     return result
 
 @router.get("/sentiment")

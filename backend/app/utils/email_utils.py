@@ -174,12 +174,30 @@ def strip_html(html: str) -> str:
     return text.strip()
 
 
+# Filenames produced by mail clients as protocol/transport artifacts rather
+# than user content. Hidden from attachment listings — users virtually never
+# want to download these in isolation.
+NOISE_ATTACHMENT_FILENAMES = {"smime.p7s", "smime.p7m"}
+
+
+def _is_noise_attachment(filename: str, content_type: str = "") -> bool:
+    if filename and filename.lower() in NOISE_ATTACHMENT_FILENAMES:
+        return True
+    ct = (content_type or "").lower()
+    if ct in {"application/pkcs7-signature", "application/x-pkcs7-signature"}:
+        return True
+    return False
+
+
 def extract_attachments(msg) -> tuple[bool, list[str]]:
     """
     Extract attachment info from an email.
 
     Returns:
         (has_attachments, list_of_filenames)
+
+    S/MIME signature parts (smime.p7s / pkcs7-signature) are skipped — they're
+    cryptographic envelopes attached to every signed message, not user content.
     """
     filenames = []
     if not msg.is_multipart():
@@ -187,12 +205,16 @@ def extract_attachments(msg) -> tuple[bool, list[str]]:
 
     for part in msg.walk():
         content_disposition = str(part.get("Content-Disposition", ""))
-        if "attachment" in content_disposition:
-            filename = part.get_filename()
-            if filename:
-                filenames.append(decode_email_header(filename))
-            else:
-                filenames.append(f"unnamed.{part.get_content_subtype()}")
+        if "attachment" not in content_disposition:
+            continue
+        filename = part.get_filename()
+        if filename:
+            filename = decode_email_header(filename)
+        else:
+            filename = f"unnamed.{part.get_content_subtype()}"
+        if _is_noise_attachment(filename, part.get_content_type()):
+            continue
+        filenames.append(filename)
 
     return (bool(filenames), filenames)
 

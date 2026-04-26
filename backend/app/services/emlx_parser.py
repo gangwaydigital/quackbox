@@ -53,7 +53,11 @@ def parse_emlx_file(emlx_path: Path, source_name: str = None) -> Optional[dict]:
     except Exception as e:
         log.warning("Cannot parse email from %s: %s", emlx_path.name, e)
         return None
-    return _message_to_record(msg, source_name or "Unknown", raw_bytes=raw)
+    # Store only the RFC822 message bytes — NOT the full .emlx file, which has
+    # a byte-count prefix line and an Apple plist trailer that confuse later
+    # re-parsing (the email library would see the digits as the body and miss
+    # all the multipart structure, including signed attachments).
+    return _message_to_record(msg, source_name or "Unknown", raw_bytes=msg_bytes)
 
 
 def _message_to_record(msg, source: str, raw_bytes: bytes = None) -> Optional[dict]:

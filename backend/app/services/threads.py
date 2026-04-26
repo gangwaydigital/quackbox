@@ -25,6 +25,11 @@ def rebuild_threads():
     Phase 2: Groups remaining emails by normalized subject.
     Singletons: Every ungrouped email becomes its own thread.
 
+    The whole rebuild runs in a single transaction (the get_db context manager
+    commits on success, rolls back on failure). A partial crash therefore leaves
+    the previous threads + thread_group_id mappings intact instead of an empty,
+    half-rebuilt state.
+
     Returns dict with total_threads, multi_message_threads, singletons, duration.
     """
     start = time.time()
@@ -82,6 +87,7 @@ def rebuild_threads():
                 singleton_count += 1
         log.info("  Singletons: %d", singleton_count)
         thread_count = 0; multi_count = 0
+        email_thread_pairs = []  # (thread_id, email_id) — applied as one executemany at the end
         for root_key, group_rows in root_groups.items():
             group_rows.sort(key=lambda r: r["date_timestamp"] or 0)
             participants = set()
@@ -99,10 +105,13 @@ def rebuild_threads():
             cursor = conn.execute("INSERT INTO threads (root_message_id, subject_normalized, participant_count, message_count, first_date, last_date, duration_seconds, mailbox_sources) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 (root_msg_id, norm_subj, len(participants), len(group_rows), first_date, last_date, duration, json.dumps(sorted(mailboxes))))
             tid = cursor.lastrowid
-            for r in group_rows: conn.execute("UPDATE emails SET thread_group_id = ? WHERE id = ?", (tid, r["id"]))
+            email_thread_pairs.extend((tid, r["id"]) for r in group_rows)
             thread_count += 1
             if len(group_rows) > 1: multi_count += 1
-            if thread_count % 5000 == 0: conn.commit(); log.debug("  ... processed %d threads", thread_count)
+            if thread_count % 5000 == 0: log.debug("  ... built %d threads in memory", thread_count)
+        # Single batched update — much faster than N per-row UPDATEs and stays transactional
+        if email_thread_pairs:
+            conn.executemany("UPDATE emails SET thread_group_id = ? WHERE id = ?", email_thread_pairs)
     duration_s = time.time() - start
     log.info("✅ Thread rebuild complete: %d conversations, %d singletons (%.1fs)", multi_count, singleton_count, duration_s)
     return {"total_threads": thread_count, "multi_message_threads": multi_count, "singletons": singleton_count, "duration_seconds": round(duration_s, 2)}

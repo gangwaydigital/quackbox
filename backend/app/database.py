@@ -1,4 +1,5 @@
 """Database setup and connection management."""
+import re
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
@@ -6,6 +7,12 @@ from app.config import DB_PATH
 from app.logging_config import get_logger
 
 log = get_logger("database")
+
+# .emlx files start with `<byte_count>\n` (Apple Mail pads with trailing spaces).
+# An early version of emlx_parser stored the full .emlx contents as raw_message
+# instead of just the RFC822 portion. This pattern detects those broken rows so
+# we can repair them in place.
+_EMLX_PREFIX = re.compile(rb"^(\d{1,12})[ \t]*\n")
 
 def get_connection(db_path: Path = DB_PATH):
     conn = sqlite3.connect(str(db_path))
@@ -29,24 +36,20 @@ def get_db(db_path: Path = DB_PATH):
 
 def init_db(db_path: Path = DB_PATH):
     with get_db(db_path) as conn:
-        # Check if raw_message column exists (for migration)
-        result = conn.execute(
-            "PRAGMA table_info(emails)"
-        ).fetchall()
-        column_names = [row[1] for row in result]
-
-        if "raw_message" not in column_names:
-            log.info("Adding raw_message column to emails table...")
-            conn.execute("""
-                ALTER TABLE emails ADD COLUMN raw_message BLOB
-            """)
-
         conn.execute("""CREATE TABLE IF NOT EXISTS emails (
             id INTEGER PRIMARY KEY AUTOINCREMENT, message_id TEXT UNIQUE, subject TEXT,
             sender_name TEXT, sender_email TEXT, recipients TEXT, date_sent TEXT,
             date_timestamp REAL, body_text TEXT, body_html TEXT, headers TEXT,
             mbox_source TEXT, thread_id TEXT, has_attachments BOOLEAN DEFAULT 0,
             attachment_names TEXT, raw_message BLOB, created_at TEXT DEFAULT (datetime('now')))""")
+
+        # Migration: add raw_message to pre-existing databases that don't have it.
+        # Safe to run after CREATE TABLE — only ALTERs if the column is missing.
+        existing_columns = {row[1] for row in conn.execute("PRAGMA table_info(emails)").fetchall()}
+        if "raw_message" not in existing_columns:
+            log.info("Adding raw_message column to emails table...")
+            conn.execute("ALTER TABLE emails ADD COLUMN raw_message BLOB")
+
         conn.execute("CREATE INDEX IF NOT EXISTS idx_sender_email ON emails(sender_email)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_date_timestamp ON emails(date_timestamp DESC)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_date_sent ON emails(date_sent)")
@@ -224,7 +227,67 @@ def init_db(db_path: Path = DB_PATH):
             )
         """)
 
+        _migrate_emlx_raw_message(conn)
+
     log.info("Database initialized at %s", db_path)
+
+
+def _migrate_emlx_raw_message(conn: sqlite3.Connection) -> None:
+    """
+    Repair raw_message rows that contain the full .emlx file (byte-count line
+    + RFC822 message + plist trailer) by trimming back to just the message.
+    Idempotent: rows already in the correct shape are skipped because they
+    do not start with `<digits>\\n`.
+    """
+    batch_size = 200
+    fixed = 0
+    skipped_invalid = 0
+    last_id = 0
+    while True:
+        rows = conn.execute(
+            "SELECT id, raw_message FROM emails "
+            "WHERE id > ? AND raw_message IS NOT NULL "
+            "ORDER BY id LIMIT ?",
+            (last_id, batch_size),
+        ).fetchall()
+        if not rows:
+            break
+        last_id = rows[-1]["id"]
+        updates = []
+        for row in rows:
+            blob = row["raw_message"]
+            if not blob:
+                continue
+            # 64 bytes comfortably fits a 12-digit byte count plus padding spaces
+            head = bytes(blob[:64]) if isinstance(blob, (memoryview, bytes, bytearray)) else b""
+            m = _EMLX_PREFIX.match(head)
+            if not m:
+                continue
+            try:
+                byte_count = int(m.group(1))
+            except ValueError:
+                skipped_invalid += 1
+                continue
+            body_start = m.end()
+            full = bytes(blob)
+            fixed_bytes = full[body_start: body_start + byte_count]
+            if not fixed_bytes:
+                skipped_invalid += 1
+                continue
+            updates.append((fixed_bytes, row["id"]))
+        if updates:
+            conn.executemany(
+                "UPDATE emails SET raw_message = ? WHERE id = ?", updates
+            )
+            fixed += len(updates)
+    if fixed:
+        log.info("Repaired raw_message for %d emlx-imported emails", fixed)
+    if skipped_invalid:
+        log.warning(
+            "Skipped %d rows with malformed emlx-style raw_message",
+            skipped_invalid,
+        )
+
 
 def get_stats(db_path: Path = DB_PATH):
     with get_db(db_path) as conn:
@@ -237,5 +300,5 @@ def get_stats(db_path: Path = DB_PATH):
         stats["unique_senders"] = row["senders"]
         stats["mbox_sources"] = row["sources"]
         stats["date_range"] = {"earliest": row["earliest"], "latest": row["latest"]}
-        stats["version"] = "4.1.2"
+        stats["version"] = "4.2.0"
         return stats

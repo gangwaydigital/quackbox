@@ -30,7 +30,7 @@ services:
       - "8000:8000"
     volumes:
       - ./backend/app:/app/app
-      - ./data:/app/data
+      - ${DATA_PATH:-./data}:/app/data:${DATA_MOUNT_MODE:-rw}
       - db-data:/app/db
     environment:
       - DATA_DIR=/app/data

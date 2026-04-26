@@ -95,7 +95,23 @@ def merge_contacts(primary_email: str, secondary_emails: list):
         ).fetchone()
 
         if not primary:
-            return {"error": f"Primary contact {primary_email} not found"}
+            return {"error": f"Primary contact {primary_email} not found", "status": 404}
+
+        # Validate every secondary exists — otherwise the merge looks successful but does nothing
+        targets = [e for e in secondary_emails if e and e != primary_email]
+        if not targets:
+            return {"error": "No secondary contacts to merge", "status": 400}
+
+        placeholders = ",".join("?" for _ in targets)
+        existing = {
+            row["sender_email"] for row in conn.execute(
+                f"SELECT DISTINCT sender_email FROM emails WHERE sender_email IN ({placeholders})",
+                targets,
+            ).fetchall()
+        }
+        missing = [e for e in targets if e not in existing]
+        if missing:
+            return {"error": f"Secondary contact(s) not found: {', '.join(missing)}", "status": 404}
 
         # Validate every secondary exists — otherwise the merge looks successful but does nothing
         targets = [e for e in secondary_emails if e and e != primary_email]

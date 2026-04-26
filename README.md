@@ -4,7 +4,7 @@
 
 QuackBox is a self-hosted email intelligence platform that transforms `.mbox` and Apple Mail archives into a searchable, analyzable knowledge base. Explore decades of email with AI-powered search, conversation threading, contact profiling, and interactive visualizations — all running locally in Docker.
 
-![Version](https://img.shields.io/badge/version-4.1.2-blue) ![Stack](https://img.shields.io/badge/stack-Python%20%7C%20React%20%7C%20SQLite-green) ![License](https://img.shields.io/badge/license-MIT-gray)
+![Version](https://img.shields.io/badge/version-4.2.0-blue) ![Stack](https://img.shields.io/badge/stack-Python%20%7C%20React%20%7C%20SQLite-green) ![License](https://img.shields.io/badge/license-MIT-gray)
 
 ---
 
@@ -35,11 +35,23 @@ QuackBox is a self-hosted email intelligence platform that transforms `.mbox` an
 
 ### Interface
 - **Sidebar Navigation** — Collapsible left sidebar, persistent state, notification badges for unconfigured features
-- **Dark Mode** — Full dark theme toggle
+- **Dark Mode** — Full dark theme toggle, with theme-aware Contacts directory and Threads list
 - **Keyboard Shortcuts** — Vim-style navigation (`g d`, `g e`, `g t`, `g c`, etc.)
 - **Setup Wizard** — First-run auto-detection with live import progress bar showing per-source counts and elapsed time
+- **Friendly Error Messages** — API failures surface user-readable messages for network failures and bare HTTP statuses, but pass through informative server details (e.g. "Attachment not found — original mbox/emlx source must be accessible") so users see actionable explanations
+- **Empty States** — Icon-led, helpful empty states across Contacts and Threads (search vs. no-data hints)
+- **Accessible Modals** — Attachment preview modal traps focus, closes on Escape, restores focus on close, locks background scroll, and is announced with `role="dialog"` + `aria-labelledby`
 - **Export** — CSV export for emails, contacts, and threads; printable HTML thread export; single-email .eml export; attachment binary download from original source files
 - **Configurable Data Path** — Point `DATA_PATH` to any directory via `.env` instead of copying files
+
+### v4.2.0 What's New
+- **Apple Mail (.emlx) attachments now download correctly** — earlier builds stored the full `.emlx` file (byte-count prefix + plist trailer) as the raw message, breaking attachment extraction and `.eml` export for every signed/multipart email. Fixed with a one-time idempotent startup migration that repairs existing rows
+- **S/MIME signature noise hidden** — `smime.p7s` / `smime.p7m` parts no longer pollute attachment listings or counts
+- **`DATA_PATH` actually works** — `.env` overrides the data bind-mount; `DATA_MOUNT_MODE=ro` makes it read-only. New `.env.example` ships with the project
+- **Atomic thread rebuild** — single transaction with batched updates; mid-rebuild crash rolls back cleanly
+- **Accessible attachment preview modal** — focus trap, Escape closes, focus restored on close, proper ARIA roles
+- **Friendlier API errors** — network failures and bare statuses get user-readable messages, but informative server detail still passes through
+- **Polish** — dark-mode variants and icon-led empty states across Contacts and Threads
 
 ### v4.1.0 New Features
 - **Thread List View** — Thread summary cards with expandable email trees in chronological order
@@ -56,6 +68,15 @@ QuackBox is a self-hosted email intelligence platform that transforms `.mbox` an
 - **BM25 Ranked Search** — Column-weighted relevance scoring (subject 10×, sender 5×, body 1×) for better search results
 - **FTS5 Everywhere** — Advanced Search uses FTS5 instead of slow LIKE queries; instant search skips COUNT for speed
 - **Batch Semantic Lookups** — Similar/semantic search fetches all results in one query instead of N individual lookups
+- **SQL-Side Attachment Listing** — Attachment browser uses SQLite `json_each` to filter, sort, and paginate inside the database rather than loading every attachment-bearing email into memory
+
+### Reliability
+- **Diagnostic Parse Failures** — Mbox parser logs `Message-ID`, subject, file source, byte offset, and stack on parse errors instead of swallowing them as a one-line warning
+- **Validated Contact Merges** — Merging contacts now verifies every secondary address exists before any UPDATE, so an unknown address fails loudly instead of silently merging zero records (and returns a proper `404` when an address is missing, `400` when nothing was supplied)
+- **Audited JSON Skips** — Email rows whose `attachment_names` JSON is malformed are surfaced in the logs (with a sample of offending email IDs) rather than dropped silently
+- **Atomic Thread Rebuild** — Reconstructing threads now runs in a single transaction with batched `UPDATE`s; a mid-rebuild crash rolls back cleanly instead of leaving you with empty `threads` and nulled `thread_group_id`s
+- **Correct .emlx Storage** — Apple Mail `.emlx` files are stored as `<byte-count>\n<RFC822 message>\n<plist trailer>`. The parser now stores only the RFC822 portion as `raw_message`, and a one-time startup migration repairs any existing rows that contain the byte-count prefix or plist trailer — fixing attachment downloads and `.eml` exports for signed and multipart emails imported from `.emlx` archives
+- **S/MIME Noise Filtered** — `smime.p7s` and `smime.p7m` cryptographic signature parts are excluded from attachment listings, counts, and extraction. They're protocol metadata, not user content
 
 ---
 
@@ -81,13 +102,20 @@ cp ~/path/to/All\ mail.mbox data/
 cp -r ~/Library/Mail/V10 data/     # Apple Mail
 ```
 
-**Option B** — Point to an existing mail directory:
+**Option B** — Point to an existing mail directory (no copy required):
+
+```bash
+cp .env.example .env
+# then edit .env and set DATA_PATH to your archive
+```
+
+Or one-liner:
 
 ```bash
 echo "DATA_PATH=/Users/you/Library/Mail/V10" > .env
 ```
 
-Any path works — external drives, Google Takeout folders, Thunderbird profiles, etc. See `.env.example` for more examples.
+Any path works — external drives, Google Takeout folders, Thunderbird profiles, etc. For backup directories you never want QuackBox to write to, also set `DATA_MOUNT_MODE=ro` in `.env` for a read-only bind mount.
 
 ### 2. (Optional) Start Ollama
 
