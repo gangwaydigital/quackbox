@@ -70,6 +70,100 @@ def check_ollama_available() -> bool:
         return False
 
 
+# Embedding-model heuristics for the model picker. The Ollama tag list
+# contains every model installed (chat + embed mixed), so we filter on
+# known-embedding family names. New families just need to be added here.
+_KNOWN_EMBED_FAMILIES = (
+    "embed", "minilm", "bge", "e5", "snowflake-arctic-embed", "mxbai",
+    "gte-",
+)
+
+# Suggested alternatives surfaced when the current model is "slow" — the
+# choices roughly span quality/speed/size so users have something to try.
+_SUGGESTED_EMBED_MODELS = [
+    {
+        "name": "nomic-embed-text",
+        "size": "274 MB",
+        "dimensions": 768,
+        "note": "Default. Great quality, moderate speed.",
+    },
+    {
+        "name": "all-minilm",
+        "size": "46 MB",
+        "dimensions": 384,
+        "note": "~5x faster, smaller dim — good for large archives.",
+    },
+    {
+        "name": "mxbai-embed-large",
+        "size": "670 MB",
+        "dimensions": 1024,
+        "note": "Larger, slower, slightly higher quality.",
+    },
+    {
+        "name": "snowflake-arctic-embed",
+        "size": "335 MB",
+        "dimensions": 1024,
+        "note": "Strong English benchmarks.",
+    },
+]
+
+
+def list_embed_models() -> dict:
+    """
+    Probe the configured embedding endpoint for available models and merge
+    in our suggested-alternatives list. Returns a dict the Topics UI can
+    use to show the current model + offer switches.
+
+    Switching requires editing EMBED_MODEL in .env and restarting the
+    backend — we don't try to hot-swap.
+    """
+    info = {
+        "current": EMBED_MODEL,
+        "api_type": EMBED_API_TYPE,
+        "api_url": EMBED_API_URL,
+        "installed": [],
+        "suggested": _SUGGESTED_EMBED_MODELS,
+        "reachable": False,
+        "error": None,
+    }
+    try:
+        if EMBED_API_TYPE == "openai":
+            headers = {}
+            if EMBED_API_KEY:
+                headers["Authorization"] = f"Bearer {EMBED_API_KEY}"
+            resp = requests.get(f"{EMBED_API_URL}/v1/models", headers=headers, timeout=5)
+            if resp.status_code == 200:
+                info["reachable"] = True
+                # OpenAI shape: {"data": [{"id": "...", ...}]}
+                models = [m.get("id") for m in resp.json().get("data", []) if m.get("id")]
+                # Filter to embedding-looking IDs to keep the list short
+                info["installed"] = [
+                    {"name": m} for m in models
+                    if any(family in m.lower() for family in _KNOWN_EMBED_FAMILIES)
+                ]
+            else:
+                info["error"] = f"HTTP {resp.status_code} from {EMBED_API_URL}"
+        else:
+            resp = requests.get(f"{EMBED_API_URL}/api/tags", timeout=5)
+            if resp.status_code == 200:
+                info["reachable"] = True
+                # Ollama shape: {"models": [{"name": "...", "size": <bytes>, ...}]}
+                for m in resp.json().get("models", []):
+                    name = m.get("name", "")
+                    if not any(family in name.lower() for family in _KNOWN_EMBED_FAMILIES):
+                        continue
+                    item = {"name": name}
+                    size_bytes = m.get("size")
+                    if size_bytes:
+                        item["size"] = f"{round(size_bytes / 1_048_576)} MB"
+                    info["installed"].append(item)
+            else:
+                info["error"] = f"HTTP {resp.status_code} from {EMBED_API_URL}"
+    except Exception as e:
+        info["error"] = str(e)
+    return info
+
+
 def generate_embedding(text: str) -> Optional[list[float]]:
     """Generate an embedding vector using configured API (Ollama or OpenAI-compatible)."""
     try:

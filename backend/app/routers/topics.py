@@ -14,6 +14,7 @@ from app.services.clustering import (
     generate_all_embeddings,
     cluster_topics,
     get_topics,
+    list_embed_models,
     request_cancel,
     reset_cancel,
     is_cancel_requested,
@@ -165,6 +166,20 @@ async def list_topics():
 async def clustering_status():
     """Check the status of a running clustering job."""
     return _task_status
+
+
+@router.get("/embed-models")
+async def embed_models():
+    """
+    List the configured embedding model alongside any other embedding-family
+    models found on the API endpoint, plus a curated list of suggested
+    alternatives. Switching requires editing EMBED_MODEL in .env and
+    restarting the backend (no hot-swap).
+
+    Registered before /{topic_id} so the catch-all int route doesn't try
+    to parse "embed-models" as a topic id.
+    """
+    return list_embed_models()
 
 
 @router.get("/{topic_id}")

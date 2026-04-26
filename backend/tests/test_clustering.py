@@ -230,6 +230,73 @@ class TestGenerateAllEmbeddingsProgressCallback:
         assert result["errors"] == 0
 
 
+class TestListEmbedModels:
+    def test_returns_current_and_suggestions_when_unreachable(self):
+        with patch("app.services.clustering.requests.get",
+                   side_effect=Exception("connection refused")):
+            info = clustering.list_embed_models()
+        assert info["reachable"] is False
+        assert info["error"]
+        assert info["current"]  # always set from EMBED_MODEL constant
+        # Suggested alternatives are static — present even when offline
+        assert info["suggested"]
+        assert any(s["name"] == "all-minilm" for s in info["suggested"])
+
+    def test_ollama_filters_to_embed_family_models(self):
+        """The Ollama tag list mixes chat + embed models; we filter to
+        embed-family names so the picker stays useful."""
+        mock_resp = MagicMock(status_code=200)
+        mock_resp.json.return_value = {
+            "models": [
+                {"name": "nomic-embed-text:latest", "size": 274_000_000},
+                {"name": "all-minilm:latest", "size": 46_000_000},
+                {"name": "llama3.1:8b", "size": 4_700_000_000},  # chat — should be filtered
+                {"name": "qwen2.5", "size": 5_000_000_000},      # chat — should be filtered
+            ],
+        }
+        with patch.object(clustering, "EMBED_API_TYPE", "ollama"), \
+             patch("app.services.clustering.requests.get", return_value=mock_resp):
+            info = clustering.list_embed_models()
+        assert info["reachable"] is True
+        installed_names = {m["name"] for m in info["installed"]}
+        assert installed_names == {"nomic-embed-text:latest", "all-minilm:latest"}
+
+    def test_ollama_size_formatted_as_mb(self):
+        mock_resp = MagicMock(status_code=200)
+        mock_resp.json.return_value = {
+            "models": [{"name": "nomic-embed-text", "size": 274_000_000}],
+        }
+        with patch.object(clustering, "EMBED_API_TYPE", "ollama"), \
+             patch("app.services.clustering.requests.get", return_value=mock_resp):
+            info = clustering.list_embed_models()
+        assert info["installed"][0]["size"] == "261 MB"  # round(274e6 / 1_048_576)
+
+    def test_openai_filters_by_id(self):
+        mock_resp = MagicMock(status_code=200)
+        mock_resp.json.return_value = {
+            "data": [
+                {"id": "text-embedding-3-small"},
+                {"id": "gpt-4o-mini"},      # not an embedding
+                {"id": "embed-english-v3"},  # cohere-style
+            ],
+        }
+        with patch.object(clustering, "EMBED_API_TYPE", "openai"), \
+             patch("app.services.clustering.requests.get", return_value=mock_resp):
+            info = clustering.list_embed_models()
+        names = {m["name"] for m in info["installed"]}
+        assert "text-embedding-3-small" in names
+        assert "embed-english-v3" in names
+        assert "gpt-4o-mini" not in names
+
+    def test_http_error_surfaces_in_error_field(self):
+        mock_resp = MagicMock(status_code=500)
+        with patch.object(clustering, "EMBED_API_TYPE", "ollama"), \
+             patch("app.services.clustering.requests.get", return_value=mock_resp):
+            info = clustering.list_embed_models()
+        assert info["reachable"] is False
+        assert "500" in info["error"]
+
+
 class TestCheckOllamaAvailable:
     def test_returns_false_on_connection_error(self):
         with patch("app.services.clustering.requests.get",
