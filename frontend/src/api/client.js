@@ -80,6 +80,7 @@ export const api = {
   checkOllama: () => request('/topics/status/ollama'),
   getClusteringStatus: () => request('/topics/status'),
   cancelClustering: () => request('/topics/cancel', { method: 'POST' }),
+  getEmbedModels: () => request('/topics/embed-models'),
   scanData: () => request('/ingest/scan'),
   getWatcherStatus: () => request('/ingest/watcher'),
   triggerWatcherScan: () => request('/ingest/watcher/scan', { method: 'POST' }),

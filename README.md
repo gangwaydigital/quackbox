@@ -187,6 +187,27 @@ Edit `docker-compose.yml` environment variables:
 | `EMBED_API_TYPE` | `ollama` | `ollama` or `openai` |
 | `EMBEDDING_DIMENSIONS` | `768` | Vector size (match your model) |
 
+#### Choosing an embedding model
+
+The Topics page shows the active model + a picker; this is the same data:
+
+| Model | Size | Dim | Speed | Notes |
+|-------|------|-----|-------|-------|
+| `nomic-embed-text` (default) | 274 MB | 768 | moderate | Solid quality, balanced |
+| `all-minilm` | 46 MB | 384 | ~5× faster | Good for large archives where speed matters |
+| `mxbai-embed-large` | 670 MB | 1024 | slower | Higher quality |
+| `snowflake-arctic-embed` | 335 MB | 1024 | moderate | Strong English benchmarks |
+| `text-embedding-3-small` (OpenAI) | hosted | 1536 | very fast | Cheap, hosted, requires API key |
+| `text-embedding-3-large` (OpenAI) | hosted | 3072 | fast | Highest quality |
+
+To switch:
+1. (Ollama only) `ollama pull <model-name>`
+2. Edit `EMBED_MODEL` in `.env` (and `EMBEDDING_DIMENSIONS` to match)
+3. `docker compose up -d backend`
+4. Re-run clustering on the Topics page — old embeddings from a different model aren't interchangeable
+
+For a 50k-email archive on local Ollama, `nomic-embed-text` typically takes 60–90 minutes; `all-minilm` runs the same archive in roughly 15–25 minutes; `text-embedding-3-small` over the OpenAI API finishes in a few minutes (you pay ~$0.50 for 50k emails at current pricing).
+
 ### Example: OpenAI chat + local Ollama embeddings
 
 ```yaml
