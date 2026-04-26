@@ -151,7 +151,13 @@ export function ThreadList() {
         {loading ? (
           <div className="p-8 text-center text-gray-400">Loading threads...</div>
         ) : threads.length === 0 ? (
-          <div className="p-8 text-center text-gray-400">No threads found. Click "Rebuild Threads" to reconstruct conversations.</div>
+          <div className="p-12 text-center bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800">
+            <MessageSquare className="w-10 h-10 text-gray-300 dark:text-gray-700 mx-auto mb-3" />
+            <p className="text-sm font-medium text-gray-600 dark:text-gray-300">No conversations yet.</p>
+            <p className="text-xs text-gray-400 mt-1">
+              Click <span className="font-medium">Rebuild Threads</span> to reconstruct conversations from your archive.
+            </p>
+          </div>
         ) : (
           threads.map((t) => (
             <div key={t.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">

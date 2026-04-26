@@ -2,8 +2,25 @@
 import json
 from fastapi import APIRouter, Query
 from app.database import get_db
+from app.logging_config import get_logger
 
 router = APIRouter(prefix="/api/attachments", tags=["attachments"])
+log = get_logger("attachments")
+
+
+def _file_ext(name):
+    """Return the lowercase extension of a filename, or empty string."""
+    if not name or "." not in name:
+        return ""
+    return name.rsplit(".", 1)[-1].lower()
+
+
+_SORT_COLUMNS = {
+    "date": "date_timestamp DESC, email_id DESC",
+    "name": "LOWER(filename) ASC",
+    "type": "file_ext(filename) ASC, LOWER(filename) ASC",
+}
+
 
 @router.get("")
 async def list_attachments(
@@ -14,58 +31,65 @@ async def list_attachments(
 ):
     """List all attachments across the archive."""
     with get_db() as conn:
-        # Get all emails with attachments
-        rows = conn.execute("""
-            SELECT id, subject, sender_name, sender_email, date_sent,
-                   mbox_source, attachment_names
-            FROM emails
-            WHERE has_attachments = 1 AND attachment_names IS NOT NULL
-            ORDER BY date_timestamp DESC
-        """).fetchall()
+        conn.create_function("file_ext", 1, _file_ext, deterministic=True)
 
-        # Flatten to individual attachments
-        attachments = []
-        for row in rows:
-            try:
-                names = json.loads(row["attachment_names"]) if row["attachment_names"] else []
-            except (json.JSONDecodeError, TypeError):
-                continue
-            for name in names:
-                if not name: continue
-                attachments.append({
-                    "filename": name,
-                    "extension": name.rsplit('.', 1)[-1].lower() if '.' in name else '',
-                    "email_id": row["id"],
-                    "subject": row["subject"],
-                    "sender_name": row["sender_name"],
-                    "sender_email": row["sender_email"],
-                    "date_sent": row["date_sent"],
-                    "mbox_source": row["mbox_source"],
-                })
-
-        # Filter by search
+        order_by = _SORT_COLUMNS.get(sort_by, _SORT_COLUMNS["date"])
+        params = {}
+        where = """
+            e.has_attachments = 1
+            AND e.attachment_names IS NOT NULL
+            AND json_valid(e.attachment_names)
+            AND j.value IS NOT NULL AND j.value != ''
+        """
         if search:
-            search_lower = search.lower()
-            attachments = [a for a in attachments if search_lower in a["filename"].lower()
-                          or search_lower in (a.get("subject") or "").lower()]
+            where += " AND (LOWER(j.value) LIKE :pat OR LOWER(COALESCE(e.subject,'')) LIKE :pat)"
+            params["pat"] = f"%{search.lower()}%"
 
-        # Sort
-        if sort_by == "name":
-            attachments.sort(key=lambda a: a["filename"].lower())
-        elif sort_by == "type":
-            attachments.sort(key=lambda a: a["extension"])
-        # default: date (already sorted)
+        base_from = f"FROM emails e, json_each(e.attachment_names) j WHERE {where}"
 
-        total = len(attachments)
+        # Total count
+        total = conn.execute(f"SELECT COUNT(*) {base_from}", params).fetchone()[0]
+
+        # Page items
         offset = (page - 1) * page_size
-        page_items = attachments[offset:offset + page_size]
+        rows = conn.execute(
+            f"""
+            SELECT e.id AS email_id, e.subject, e.sender_name, e.sender_email,
+                   e.date_sent, e.date_timestamp, e.mbox_source,
+                   j.value AS filename, file_ext(j.value) AS extension
+            {base_from}
+            ORDER BY {order_by}
+            LIMIT :ps OFFSET :off
+            """,
+            {**params, "ps": page_size, "off": offset},
+        ).fetchall()
 
-        # Extension stats
-        ext_counts = {}
-        for a in attachments:
-            ext = a["extension"] or "other"
-            ext_counts[ext] = ext_counts.get(ext, 0) + 1
-        top_extensions = sorted(ext_counts.items(), key=lambda x: -x[1])[:15]
+        page_items = [
+            {
+                "filename": r["filename"],
+                "extension": r["extension"],
+                "email_id": r["email_id"],
+                "subject": r["subject"],
+                "sender_name": r["sender_name"],
+                "sender_email": r["sender_email"],
+                "date_sent": r["date_sent"],
+                "mbox_source": r["mbox_source"],
+            }
+            for r in rows
+        ]
+
+        # Top extensions across the full filtered set (not just this page)
+        ext_rows = conn.execute(
+            f"""
+            SELECT COALESCE(NULLIF(file_ext(j.value), ''), 'other') AS ext, COUNT(*) AS c
+            {base_from}
+            GROUP BY ext
+            ORDER BY c DESC
+            LIMIT 15
+            """,
+            params,
+        ).fetchall()
+        top_extensions = [{"ext": r["ext"], "count": r["c"]} for r in ext_rows]
 
         return {
             "items": page_items,
@@ -73,36 +97,56 @@ async def list_attachments(
             "page": page,
             "page_size": page_size,
             "total_pages": max(1, (total + page_size - 1) // page_size),
-            "top_extensions": [{"ext": e, "count": c} for e, c in top_extensions],
+            "top_extensions": top_extensions,
         }
+
 
 @router.get("/stats")
 async def attachment_stats():
     """Get attachment statistics."""
     with get_db() as conn:
-        total_with = conn.execute("SELECT COUNT(*) FROM emails WHERE has_attachments = 1").fetchone()[0]
-        rows = conn.execute("""
-            SELECT attachment_names FROM emails
-            WHERE has_attachments = 1 AND attachment_names IS NOT NULL
-        """).fetchall()
+        conn.create_function("file_ext", 1, _file_ext, deterministic=True)
 
-        total_files = 0
-        ext_counts = {}
-        for row in rows:
-            try:
-                names = json.loads(row["attachment_names"]) if row["attachment_names"] else []
-            except (json.JSONDecodeError, TypeError):
-                continue
-            for name in names:
-                if not name: continue
-                total_files += 1
-                ext = name.rsplit('.', 1)[-1].lower() if '.' in name else 'other'
-                ext_counts[ext] = ext_counts.get(ext, 0) + 1
+        total_with = conn.execute(
+            "SELECT COUNT(*) FROM emails WHERE has_attachments = 1"
+        ).fetchone()[0]
+
+        # Skip rows whose JSON failed to parse, but warn so they don't disappear silently
+        invalid = conn.execute(
+            """
+            SELECT id FROM emails
+            WHERE has_attachments = 1
+              AND attachment_names IS NOT NULL
+              AND NOT json_valid(attachment_names)
+            LIMIT 5
+            """
+        ).fetchall()
+        if invalid:
+            log.warning(
+                "Skipping %d email row(s) with invalid attachment_names JSON (sample ids: %s)",
+                len(invalid), [r["id"] for r in invalid],
+            )
+
+        ext_rows = conn.execute(
+            """
+            SELECT COALESCE(NULLIF(file_ext(j.value), ''), 'other') AS ext, COUNT(*) AS c
+            FROM emails e, json_each(e.attachment_names) j
+            WHERE e.has_attachments = 1
+              AND e.attachment_names IS NOT NULL
+              AND json_valid(e.attachment_names)
+              AND j.value IS NOT NULL AND j.value != ''
+            GROUP BY ext
+            ORDER BY c DESC
+            LIMIT 20
+            """
+        ).fetchall()
+
+        total_files = sum(r["c"] for r in ext_rows)
 
         return {
             "emails_with_attachments": total_with,
             "total_files": total_files,
-            "top_extensions": sorted(ext_counts.items(), key=lambda x: -x[1])[:20],
+            "top_extensions": [(r["ext"], r["c"]) for r in ext_rows],
         }
 
 
