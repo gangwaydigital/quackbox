@@ -78,6 +78,7 @@ export const api = {
   generateEmbeddings: (r = false) => request(`/topics/embed?regenerate=${r}`, { method: 'POST' }),
   runClustering: (n = null) => request('/topics/cluster', { method: 'POST', body: JSON.stringify({ num_clusters: n, regenerate_embeddings: false }) }),
   checkOllama: () => request('/topics/status/ollama'),
+  getClusteringStatus: () => request('/topics/status'),
   scanData: () => request('/ingest/scan'),
   checkIngest: () => request('/ingest/check'),
   startIngest: (force = false) => request(`/ingest/start?force=${force}`, { method: 'POST' }),
