@@ -1,7 +1,10 @@
 """Topic clustering endpoints."""
 
 import asyncio
+import time
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -24,9 +27,51 @@ router = APIRouter(prefix="/api/topics", tags=["topics"])
 _task_status = {
     "running": False, "phase": "idle", "progress": "",
     "embeddings_done": 0, "embeddings_total": 0,
+    "embeddings_per_second": None, "eta_seconds": None,
     "result": None, "error": None,
 }
 _executor = ThreadPoolExecutor(max_workers=1)
+
+
+class _RateTracker:
+    """
+    Rolling-window estimator for embedding throughput.
+
+    Keeps the last `window_seconds` of (timestamp, done) samples so the rate
+    reflects current performance — early-batch warmup or a slow Ollama spell
+    don't poison the ETA forever.
+    """
+
+    def __init__(self, window_seconds: float = 30.0):
+        self.window = window_seconds
+        self.samples: deque = deque()  # (timestamp, done)
+
+    def record(self, done: int) -> None:
+        now = time.time()
+        self.samples.append((now, done))
+        cutoff = now - self.window
+        while self.samples and self.samples[0][0] < cutoff:
+            self.samples.popleft()
+
+    def rate_per_second(self) -> Optional[float]:
+        if len(self.samples) < 2:
+            return None
+        first_t, first_d = self.samples[0]
+        last_t, last_d = self.samples[-1]
+        delta_t = last_t - first_t
+        delta_d = last_d - first_d
+        if delta_t <= 0 or delta_d <= 0:
+            return None
+        return delta_d / delta_t
+
+    def eta_seconds(self, total: int) -> Optional[int]:
+        rate = self.rate_per_second()
+        if rate is None or rate <= 0 or not self.samples:
+            return None
+        remaining = total - self.samples[-1][1]
+        if remaining <= 0:
+            return 0
+        return int(remaining / rate)
 
 
 def _reset_status(phase: str = "starting", progress: str = "") -> None:
@@ -35,21 +80,41 @@ def _reset_status(phase: str = "starting", progress: str = "") -> None:
     _task_status.update({
         "running": True, "phase": phase, "progress": progress,
         "embeddings_done": 0, "embeddings_total": 0,
+        "embeddings_per_second": None, "eta_seconds": None,
         "result": None, "error": None,
     })
+
+
+def _format_eta(seconds: Optional[int]) -> str:
+    if seconds is None:
+        return ""
+    if seconds < 60:
+        return f"~{seconds}s left"
+    if seconds < 3600:
+        return f"~{seconds // 60}m left"
+    h, rem = divmod(seconds, 3600)
+    return f"~{h}h {rem // 60}m left"
 
 
 def _run_clustering_sync(num_clusters, regenerate):
     """Run clustering in a background thread."""
     try:
         _reset_status(phase="embedding", progress="Generating embeddings...")
+        tracker = _RateTracker()
 
         def on_embed_progress(done: int, total: int) -> None:
+            tracker.record(done)
+            rate = tracker.rate_per_second()
+            eta = tracker.eta_seconds(total)
             _task_status["embeddings_done"] = done
             _task_status["embeddings_total"] = total
+            _task_status["embeddings_per_second"] = round(rate, 2) if rate else None
+            _task_status["eta_seconds"] = eta
             if total > 0:
                 pct = round(done / total * 100)
-                _task_status["progress"] = f"Generating embeddings: {done:,} / {total:,} ({pct}%)"
+                base = f"Generating embeddings: {done:,} / {total:,} ({pct}%)"
+                eta_str = _format_eta(eta)
+                _task_status["progress"] = f"{base} · {eta_str}" if eta_str else base
             else:
                 _task_status["progress"] = "Generating embeddings…"
 
@@ -116,13 +181,21 @@ def _run_embed_only_sync(regenerate: bool) -> None:
     """Run embedding generation in a background thread + report progress."""
     try:
         _reset_status(phase="embedding", progress="Generating embeddings…")
+        tracker = _RateTracker()
 
         def on_embed_progress(done: int, total: int) -> None:
+            tracker.record(done)
+            rate = tracker.rate_per_second()
+            eta = tracker.eta_seconds(total)
             _task_status["embeddings_done"] = done
             _task_status["embeddings_total"] = total
+            _task_status["embeddings_per_second"] = round(rate, 2) if rate else None
+            _task_status["eta_seconds"] = eta
             if total > 0:
                 pct = round(done / total * 100)
-                _task_status["progress"] = f"Generating embeddings: {done:,} / {total:,} ({pct}%)"
+                base = f"Generating embeddings: {done:,} / {total:,} ({pct}%)"
+                eta_str = _format_eta(eta)
+                _task_status["progress"] = f"{base} · {eta_str}" if eta_str else base
 
         embed_result = generate_all_embeddings(
             regenerate=regenerate, progress_callback=on_embed_progress,
