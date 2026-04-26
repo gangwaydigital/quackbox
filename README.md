@@ -306,9 +306,9 @@ The database persists in a Docker volume (`db-data`). Email data lives in `data/
 
 ### Tests
 
-`backend/tests/` contains pytest coverage of the parsers (mbox + emlx), email utilities, the .emlx raw-message migration, and the contact-merge service — the most regression-prone areas. Run with `make test`.
+`backend/tests/` contains pytest coverage of the parsers (mbox + emlx), email utilities, the .emlx raw-message migration, contact merge, FTS5 search (sanitization, ranking, snippets, instant search, filters), the attachment extractor (real attachments, smime filtering, .eml export sanitization), and the background watcher (lifecycle + tick behavior). Run with `make test`.
 
-The suite is intentionally fast (under a second) and uses synthetic mbox/emlx fixtures built in-memory; no real email data is required.
+The suite is intentionally fast (~1s for 100+ tests) and uses synthetic mbox/emlx fixtures built in-memory; no real email data is required.
 
 ---
 
