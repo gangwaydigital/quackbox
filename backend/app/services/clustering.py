@@ -6,6 +6,7 @@ to discover email topics automatically.
 """
 
 import json
+import threading
 import time
 from typing import Optional
 
@@ -27,6 +28,27 @@ from app.database import get_db
 from app.logging_config import get_logger
 
 log = get_logger("clustering")
+
+
+# Cooperative cancellation flag for the embedding loop. Set by the topics
+# router when the user clicks "Cancel"; checked between batches so we can
+# bail cleanly without losing the embeddings already persisted.
+_cancel_event = threading.Event()
+
+
+def request_cancel() -> None:
+    """Signal the in-flight generate_all_embeddings loop to stop after the
+    current batch. Safe to call from any thread."""
+    _cancel_event.set()
+
+
+def reset_cancel() -> None:
+    """Clear the cancellation flag. Call before starting a new run."""
+    _cancel_event.clear()
+
+
+def is_cancel_requested() -> bool:
+    return _cancel_event.is_set()
 
 
 def check_ollama_available() -> bool:
@@ -133,7 +155,18 @@ def generate_all_embeddings(
         log.info("🧠 Generating embeddings for %d emails...", total)
         _emit(0, total)
 
+        cancelled = False
+        processed = 0
         for i, row in enumerate(rows):
+            # Cooperative cancellation — check at the top of each iteration
+            # so already-completed batches stay persisted.
+            if is_cancel_requested():
+                cancelled = True
+                conn.commit()
+                _emit(processed, total)
+                log.info("⛔ Embedding cancelled at %d/%d", processed, total)
+                break
+
             # Create embedding input: combine subject + sender + body snippet
             text = _make_embedding_text(
                 subject=row["subject"],
@@ -143,6 +176,7 @@ def generate_all_embeddings(
 
             if not text.strip():
                 skipped += 1
+                processed = i + 1
                 continue
 
             embedding = generate_embedding(text)
@@ -157,13 +191,15 @@ def generate_all_embeddings(
             else:
                 errors += 1
 
-            if (i + 1) % batch_size == 0:
+            processed = i + 1
+            if processed % batch_size == 0:
                 conn.commit()
-                log.debug("  ... %d/%d (%d generated)", i + 1, total, generated)
-                _emit(i + 1, total)
+                log.debug("  ... %d/%d (%d generated)", processed, total, generated)
+                _emit(processed, total)
 
-        # Final emit so callers see 100%
-        _emit(total, total)
+        if not cancelled:
+            # Final emit so callers see 100%
+            _emit(total, total)
 
     duration = time.time() - start
     result = {
@@ -171,9 +207,13 @@ def generate_all_embeddings(
         "generated": generated,
         "skipped": skipped,
         "errors": errors,
+        "cancelled": cancelled,
         "duration_seconds": round(duration, 2),
     }
-    log.info("✅ Embeddings done: %d generated, %d errors (%.1fs)", generated, errors, duration)
+    if cancelled:
+        log.info("⛔ Embeddings cancelled: %d generated, %d errors (%.1fs)", generated, errors, duration)
+    else:
+        log.info("✅ Embeddings done: %d generated, %d errors (%.1fs)", generated, errors, duration)
     return result
 
 

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { Tags, Cpu, RefreshCw, ChevronDown, ChevronRight, Mail, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { Tags, Cpu, RefreshCw, ChevronDown, ChevronRight, Mail, AlertCircle, CheckCircle2, X, StopCircle } from 'lucide-react'
 import { api } from '../api/client'
 
 const POLL_INTERVAL_MS = 2000
@@ -78,6 +78,16 @@ export default function TopicClusters() {
     }
   }
 
+  const cancelClustering = async () => {
+    try {
+      await api.cancelClustering()
+      // Don't stop polling here — the loop has to finish its current batch
+      // before _task_status flips to running:false. Let the poll see it.
+    } catch (err) {
+      console.error('Cancel failed:', err)
+    }
+  }
+
   const toggleTopic = async (topicId) => {
     if (expandedTopic === topicId) {
       setExpandedTopic(null)
@@ -122,11 +132,19 @@ export default function TopicClusters() {
 
       {/* Status panel — running */}
       {taskStatus?.running && (
-        <ProgressPanel status={taskStatus} />
+        <ProgressPanel status={taskStatus} onCancel={cancelClustering} />
+      )}
+
+      {/* Status panel — cancelled */}
+      {!taskStatus?.running && taskStatus?.phase === 'cancelled' && (
+        <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700/50 rounded-lg px-4 py-3 flex items-start gap-2 text-sm text-amber-700 dark:text-amber-300">
+          <StopCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+          <div>{taskStatus.progress}</div>
+        </div>
       )}
 
       {/* Status panel — finished successfully */}
-      {!taskStatus?.running && taskStatus?.result && !taskStatus?.error && (
+      {!taskStatus?.running && taskStatus?.phase === 'done' && taskStatus?.result && !taskStatus?.error && (
         <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700/50 rounded-lg px-4 py-3 flex items-start gap-2 text-sm text-green-700 dark:text-green-300">
           <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0" />
           <div>{taskStatus.progress}</div>
@@ -236,17 +254,27 @@ export default function TopicClusters() {
 }
 
 
-function ProgressPanel({ status }) {
+function ProgressPanel({ status, onCancel }) {
   const { phase, progress, embeddings_done, embeddings_total } = status
   const pct = embeddings_total > 0
     ? Math.min(100, Math.round((embeddings_done / embeddings_total) * 100))
     : null
+  const cancelling = (progress || '').toLowerCase().startsWith('cancelling')
 
   return (
     <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700/50 rounded-lg px-4 py-3 space-y-2">
       <div className="flex items-center gap-2 text-sm text-blue-700 dark:text-blue-300">
         <RefreshCw className="w-4 h-4 animate-spin flex-shrink-0" />
-        <span className="font-medium">{progress || `Working… (${phase})`}</span>
+        <span className="font-medium flex-1">{progress || `Working… (${phase})`}</span>
+        <button
+          onClick={onCancel}
+          disabled={cancelling}
+          title="Cancel — already-completed embeddings stay persisted"
+          className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-white dark:bg-blue-900/50 border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-200 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/70 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          <X className="w-3 h-3" />
+          {cancelling ? 'Cancelling…' : 'Cancel'}
+        </button>
       </div>
       {pct !== null && phase === 'embedding' && (
         <div className="space-y-1">
@@ -262,7 +290,7 @@ function ProgressPanel({ status }) {
         </div>
       )}
       <div className="text-[10px] text-blue-600/70 dark:text-blue-400/70">
-        Safe to navigate away — progress will resume when you come back.
+        Safe to navigate away — progress will resume when you come back. Cancelling preserves embeddings already generated.
       </div>
     </div>
   )

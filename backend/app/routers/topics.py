@@ -11,6 +11,9 @@ from app.services.clustering import (
     generate_all_embeddings,
     cluster_topics,
     get_topics,
+    request_cancel,
+    reset_cancel,
+    is_cancel_requested,
 )
 from app.services.search import filter_emails
 
@@ -27,6 +30,8 @@ _executor = ThreadPoolExecutor(max_workers=1)
 
 
 def _reset_status(phase: str = "starting", progress: str = "") -> None:
+    # Clear any leftover cancel signal from a previous run
+    reset_cancel()
     _task_status.update({
         "running": True, "phase": phase, "progress": progress,
         "embeddings_done": 0, "embeddings_total": 0,
@@ -51,6 +56,21 @@ def _run_clustering_sync(num_clusters, regenerate):
         embed_result = generate_all_embeddings(
             regenerate=regenerate, progress_callback=on_embed_progress,
         )
+
+        # If the user cancelled mid-embedding, stop here. The embeddings that
+        # made it in stay persisted, so re-running picks up where we left off.
+        if embed_result.get("cancelled"):
+            _task_status.update({
+                "running": False, "phase": "cancelled",
+                "progress": (
+                    f"Cancelled — {embed_result.get('generated', 0):,} embeddings "
+                    f"persisted; re-run to continue"
+                ),
+                "result": {"embedding_stats": embed_result, "cancelled": True},
+                "error": None,
+            })
+            return
+
         _task_status["phase"] = "clustering"
         _task_status["progress"] = "Clustering topics…"
         result = cluster_topics(num_clusters=num_clusters)
@@ -107,11 +127,20 @@ def _run_embed_only_sync(regenerate: bool) -> None:
         embed_result = generate_all_embeddings(
             regenerate=regenerate, progress_callback=on_embed_progress,
         )
-        _task_status.update({
-            "running": False, "phase": "done",
-            "progress": f"Done — {embed_result.get('generated', 0):,} embeddings generated",
-            "result": embed_result, "error": None,
-        })
+        if embed_result.get("cancelled"):
+            _task_status.update({
+                "running": False, "phase": "cancelled",
+                "progress": (
+                    f"Cancelled — {embed_result.get('generated', 0):,} embeddings persisted"
+                ),
+                "result": embed_result, "error": None,
+            })
+        else:
+            _task_status.update({
+                "running": False, "phase": "done",
+                "progress": f"Done — {embed_result.get('generated', 0):,} embeddings generated",
+                "result": embed_result, "error": None,
+            })
     except Exception as e:
         _task_status.update({
             "running": False, "phase": "error", "progress": "",
@@ -145,3 +174,20 @@ async def run_clustering(request: ClusterRequest = ClusterRequest()):
 async def check_ollama():
     available = check_ollama_available()
     return {"available": available, "model": "nomic-embed-text", "message": "Ready" if available else "Ollama not running or model not pulled"}
+
+
+@router.post("/cancel")
+async def cancel_clustering():
+    """
+    Request cancellation of an in-flight embedding/clustering job.
+
+    Cancellation is cooperative — the embedding loop checks the flag between
+    batches, so it may take a few seconds before the task actually stops.
+    Embeddings already persisted stay in the database; re-running picks up
+    where this left off (skipping emails that already have embeddings).
+    """
+    if not _task_status.get("running"):
+        return {"message": "No clustering job is currently running.", "cancelled": False}
+    request_cancel()
+    _task_status["progress"] = "Cancelling…"
+    return {"message": "Cancellation requested. The job will stop after the current batch.", "cancelled": True}
