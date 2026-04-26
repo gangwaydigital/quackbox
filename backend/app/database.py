@@ -209,6 +209,31 @@ def init_db(db_path: Path = DB_PATH):
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_emlx_source ON ingest_emlx_files(source_name)")
 
+        # -- Calendar events extracted from text/calendar parts and .ics attachments --
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS calendar_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email_id INTEGER REFERENCES emails(id) ON DELETE CASCADE,
+                uid TEXT,
+                summary TEXT,
+                description TEXT,
+                location TEXT,
+                organizer TEXT,
+                attendees TEXT,
+                start_time TEXT,
+                end_time TEXT,
+                start_timestamp REAL,
+                end_timestamp REAL,
+                status TEXT,
+                method TEXT,
+                source TEXT,
+                created_at TEXT DEFAULT (datetime('now')),
+                UNIQUE(email_id, uid)
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_event_start ON calendar_events(start_timestamp)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_event_email ON calendar_events(email_id)")
+
         # -- Saved searches / smart folders --
         conn.execute("""
             CREATE TABLE IF NOT EXISTS saved_searches (

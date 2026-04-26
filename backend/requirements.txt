@@ -20,3 +20,6 @@ python-multipart>=0.0.9   # File uploads
 # Attachment text extraction
 pypdf>=4.0.0              # PDF text extraction
 python-docx>=1.1.0        # DOCX text extraction
+
+# Calendar event extraction (.ics / text/calendar parts)
+icalendar>=5.0.0

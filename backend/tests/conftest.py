@@ -67,6 +67,49 @@ def msg_with_attachment() -> bytes:
 
 
 @pytest.fixture
+def msg_with_calendar_invite() -> bytes:
+    """A multipart message carrying a text/calendar VEVENT invite."""
+    return _normalize("""
+        From: Alice <alice@example.com>
+        To: Bob <bob@example.com>
+        Subject: Project sync
+        Date: Mon, 1 Jan 2024 10:00:00 +0000
+        Message-ID: <invite-1@example.com>
+        MIME-Version: 1.0
+        Content-Type: multipart/alternative; boundary="MIX1"
+
+        --MIX1
+        Content-Type: text/plain; charset=utf-8
+
+        Project sync — Wednesday at 2pm.
+
+        --MIX1
+        Content-Type: text/calendar; method=REQUEST; charset=UTF-8
+
+        BEGIN:VCALENDAR
+        VERSION:2.0
+        PRODID:-//Test//EN
+        METHOD:REQUEST
+        BEGIN:VEVENT
+        UID:event-uid-123@example.com
+        DTSTAMP:20240101T100000Z
+        DTSTART:20240110T140000Z
+        DTEND:20240110T150000Z
+        SUMMARY:Project sync
+        DESCRIPTION:Weekly check-in
+        LOCATION:Zoom
+        ORGANIZER;CN=Alice:MAILTO:alice@example.com
+        ATTENDEE;CN=Bob:MAILTO:bob@example.com
+        ATTENDEE;CN=Carol:MAILTO:carol@example.com
+        STATUS:CONFIRMED
+        END:VEVENT
+        END:VCALENDAR
+
+        --MIX1--
+    """)
+
+
+@pytest.fixture
 def msg_smime_signed() -> bytes:
     """
     A multipart/signed message with an inner text body and an smime.p7s part.
