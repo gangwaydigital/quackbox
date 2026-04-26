@@ -254,12 +254,25 @@ export default function TopicClusters() {
 }
 
 
+function formatEta(seconds) {
+  if (seconds == null) return null
+  if (seconds < 60) return `~${seconds}s left`
+  if (seconds < 3600) return `~${Math.round(seconds / 60)}m left`
+  const h = Math.floor(seconds / 3600)
+  const m = Math.round((seconds - h * 3600) / 60)
+  return `~${h}h ${m}m left`
+}
+
 function ProgressPanel({ status, onCancel }) {
-  const { phase, progress, embeddings_done, embeddings_total } = status
+  const {
+    phase, progress, embeddings_done, embeddings_total,
+    embeddings_per_second, eta_seconds,
+  } = status
   const pct = embeddings_total > 0
     ? Math.min(100, Math.round((embeddings_done / embeddings_total) * 100))
     : null
   const cancelling = (progress || '').toLowerCase().startsWith('cancelling')
+  const etaLabel = formatEta(eta_seconds)
 
   return (
     <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700/50 rounded-lg px-4 py-3 space-y-2">
@@ -284,8 +297,16 @@ function ProgressPanel({ status, onCancel }) {
               style={{ width: `${pct}%` }}
             />
           </div>
-          <div className="text-[10px] text-blue-600 dark:text-blue-400 text-right">
-            {embeddings_done.toLocaleString()} / {embeddings_total.toLocaleString()}
+          <div className="flex items-center justify-between text-[10px] text-blue-600 dark:text-blue-400">
+            <span>
+              {embeddings_per_second != null && embeddings_per_second > 0 && (
+                <>{embeddings_per_second}/s</>
+              )}
+            </span>
+            <span className="text-right">
+              {embeddings_done.toLocaleString()} / {embeddings_total.toLocaleString()}
+              {etaLabel && <span className="ml-2 font-medium">· {etaLabel}</span>}
+            </span>
           </div>
         </div>
       )}
