@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Search, Calendar, User, Paperclip, X, Bookmark } from 'lucide-react'
 import { api } from '../api/client'
 import SavedSearches from './SavedSearches'
@@ -65,6 +65,24 @@ export default function AdvancedSearch() {
     setActiveSavedId(s.id)
     setSelectedId(null)
   }
+
+  // If the URL is /search?saved=<id>, load that saved search on mount/change.
+  // Lets the sidebar smart folders link directly to a configured search.
+  const [searchParams] = useSearchParams()
+  const savedFromUrl = searchParams.get('saved')
+  useEffect(() => {
+    if (!savedFromUrl) return
+    const id = Number(savedFromUrl)
+    if (!id || activeSavedId === id) return
+    api.getSavedSearches().then(d => {
+      const match = (d.searches || []).find(s => s.id === id)
+      if (match) {
+        runSavedSearch(match)
+        api.recordSavedSearchRun(id).catch(() => {})
+      }
+    }).catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedFromUrl])
 
   const currentFilters = { query, sender, dateFrom, dateTo, hasAttach }
 
