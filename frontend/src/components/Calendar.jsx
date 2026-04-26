@@ -60,17 +60,17 @@ export default function CalendarView() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
           <CalIcon className="w-5 h-5 text-blue-600" /> Calendar
         </h2>
         <div className="flex items-center gap-3">
-          <button onClick={prev} className="p-1.5 rounded-lg hover:bg-gray-100"><ChevronLeft className="w-4 h-4" /></button>
-          <span className="text-sm font-medium text-gray-700 min-w-[140px] text-center">{MONTH_NAMES[month-1]} {year}</span>
-          <button onClick={next} className="p-1.5 rounded-lg hover:bg-gray-100"><ChevronRight className="w-4 h-4" /></button>
+          <button onClick={prev} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"><ChevronLeft className="w-4 h-4" /></button>
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[140px] text-center">{MONTH_NAMES[month-1]} {year}</span>
+          <button onClick={next} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"><ChevronRight className="w-4 h-4" /></button>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
         {/* Day headers */}
         <div className="grid grid-cols-7 gap-1 mb-1">
           {DAY_NAMES.map(d => <div key={d} className="text-center text-[10px] font-medium text-gray-400 py-1">{d}</div>)}
@@ -112,9 +112,9 @@ export default function CalendarView() {
 
       {/* Selected day detail */}
       {selectedDay && (
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
               <Mail className="w-4 h-4" />
               {new Date(selectedDay + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
             </h3>
@@ -123,12 +123,12 @@ export default function CalendarView() {
           {loadingDay ? (
             <div className="space-y-2">{Array.from({length:3},(_,i)=><div key={i} className="skeleton h-12 rounded-lg" />)}</div>
           ) : dayEmails?.emails?.length ? (
-            <div className="divide-y divide-gray-100 max-h-96 overflow-y-auto">
+            <div className="divide-y divide-gray-100 dark:divide-gray-800 max-h-96 overflow-y-auto">
               {dayEmails.emails.map(e => (
-                <Link key={e.id} to={`/email/${e.id}`} className="block py-2.5 px-2 -mx-2 hover:bg-gray-50 rounded transition-colors">
+                <Link key={e.id} to={`/email/${e.id}`} className="block py-2.5 px-2 -mx-2 hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded transition-colors">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-gray-800 truncate">{e.subject || '(no subject)'}</div>
+                      <div className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{e.subject || '(no subject)'}</div>
                       <div className="text-xs text-gray-400">{e.sender_name || e.sender_email} · {e.mbox_source}</div>
                     </div>
                     <div className="text-[10px] text-gray-400 flex-shrink-0">

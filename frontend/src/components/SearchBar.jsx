@@ -138,12 +138,12 @@ export default function SearchBar({ onSearch, onModeChange, searchMode = 'keywor
           <input ref={inputRef} type="text" value={value} onChange={handleChange} onKeyDown={handleKeyDown}
             onFocus={handleFocus}
             placeholder={searchMode === 'smart' ? 'Smart search — describe what you\'re looking for...' : 'Search emails — subjects, senders, body text...'}
-            className="w-full pl-10 pr-10 py-3 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
-          {value && <button onClick={handleClear} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>}
+            className="w-full pl-10 pr-10 py-3 bg-white dark:bg-gray-800 dark:text-white dark:placeholder-gray-500 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+          {value && <button onClick={handleClear} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"><X className="w-4 h-4" /></button>}
         </div>
         {onModeChange && (
           <button onClick={() => onModeChange(searchMode === 'keyword' ? 'smart' : 'keyword')}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border transition-colors ${searchMode === 'smart' ? 'bg-purple-50 border-purple-200 text-purple-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border transition-colors ${searchMode === 'smart' ? 'bg-purple-50 dark:bg-purple-900/40 border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-300' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50'}`}
             title={searchMode === 'smart' ? 'Using AI-powered semantic search' : 'Using keyword search'}>
             {searchMode === 'smart' ? <><Sparkles className="w-3.5 h-3.5" />Smart</> : <><Type className="w-3.5 h-3.5" />Keyword</>}
           </button>
@@ -152,22 +152,22 @@ export default function SearchBar({ onSearch, onModeChange, searchMode = 'keywor
 
       {/* Instant preview dropdown */}
       {showPreview && (
-        <div className="absolute z-30 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden">
+        <div className="absolute z-30 top-full left-0 right-0 mt-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl overflow-hidden">
           {previewLoading && preview.length === 0 ? (
             <div className="px-4 py-3 text-sm text-gray-400 flex items-center gap-2">
-              <div className="w-3 h-3 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+              <div className="w-3 h-3 border-2 border-gray-300 dark:border-gray-600 border-t-blue-500 rounded-full animate-spin" />
               Searching...
             </div>
           ) : (
             <>
-              <div className="divide-y divide-gray-100">
+              <div className="divide-y divide-gray-100 dark:divide-gray-800">
                 {preview.map((item, i) => (
                   <Link key={item.id} to={`/email/${item.id}`}
                     onClick={() => setShowDropdown(false)}
-                    className={`block px-4 py-2.5 transition-colors ${i === selectedIdx ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
+                    className={`block px-4 py-2.5 transition-colors ${i === selectedIdx ? 'bg-blue-50 dark:bg-blue-900/40' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'}`}>
                     <div className="flex items-center gap-2">
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-gray-800 truncate">
+                        <div className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
                           {item.subject || '(no subject)'}
                         </div>
                         <div className="flex items-center gap-2 mt-0.5">
@@ -179,7 +179,7 @@ export default function SearchBar({ onSearch, onModeChange, searchMode = 'keywor
                               {new Date(item.date_sent).toLocaleDateString()}
                             </span>
                           )}
-                          {item.has_attachments && <Paperclip className="w-3 h-3 text-gray-300 flex-shrink-0" />}
+                          {item.has_attachments && <Paperclip className="w-3 h-3 text-gray-300 dark:text-gray-600 flex-shrink-0" />}
                           {item.thread_group_id && <MessageSquare className="w-3 h-3 text-blue-400 flex-shrink-0" />}
                         </div>
                         {item.body_highlight && (
@@ -192,7 +192,7 @@ export default function SearchBar({ onSearch, onModeChange, searchMode = 'keywor
                 ))}
               </div>
               {preview.length > 0 && (
-                <div className="px-4 py-2 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+                <div className="px-4 py-2 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between">
                   <span className="text-xs text-gray-400">
                     Press Enter to search all · ↑↓ to navigate
                   </span>
@@ -208,15 +208,15 @@ export default function SearchBar({ onSearch, onModeChange, searchMode = 'keywor
 
       {/* Saved searches dropdown */}
       {showHistory && (
-        <div className="absolute z-30 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden">
-          <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100">
+        <div className="absolute z-30 top-full left-0 right-0 mt-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl overflow-hidden">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 dark:border-gray-800">
             <span className="text-xs text-gray-400 flex items-center gap-1"><Clock className="w-3 h-3" />Recent searches</span>
             <button onClick={clearSaved} className="text-xs text-gray-400 hover:text-red-500">Clear all</button>
           </div>
           {saved.map((q, i) => (
             <button key={i} onClick={() => pickSaved(q)}
-              className={`w-full text-left px-3 py-2 text-sm text-gray-700 flex items-center gap-2 transition-colors ${i === selectedIdx ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
-              <Clock className="w-3 h-3 text-gray-300" />{q}
+              className={`w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2 transition-colors ${i === selectedIdx ? 'bg-blue-50 dark:bg-blue-900/40' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'}`}>
+              <Clock className="w-3 h-3 text-gray-300 dark:text-gray-600" />{q}
             </button>
           ))}
         </div>
