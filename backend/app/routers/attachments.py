@@ -40,6 +40,7 @@ async def list_attachments(
             AND e.attachment_names IS NOT NULL
             AND json_valid(e.attachment_names)
             AND j.value IS NOT NULL AND j.value != ''
+            AND LOWER(j.value) NOT IN ('smime.p7s', 'smime.p7m')
         """
         if search:
             where += " AND (LOWER(j.value) LIKE :pat OR LOWER(COALESCE(e.subject,'')) LIKE :pat)"
@@ -107,8 +108,17 @@ async def attachment_stats():
     with get_db() as conn:
         conn.create_function("file_ext", 1, _file_ext, deterministic=True)
 
+        # Count emails with at least one *real* attachment (not smime.p7s noise)
         total_with = conn.execute(
-            "SELECT COUNT(*) FROM emails WHERE has_attachments = 1"
+            """
+            SELECT COUNT(DISTINCT e.id)
+            FROM emails e, json_each(e.attachment_names) j
+            WHERE e.has_attachments = 1
+              AND e.attachment_names IS NOT NULL
+              AND json_valid(e.attachment_names)
+              AND j.value IS NOT NULL AND j.value != ''
+              AND LOWER(j.value) NOT IN ('smime.p7s', 'smime.p7m')
+            """
         ).fetchone()[0]
 
         # Skip rows whose JSON failed to parse, but warn so they don't disappear silently
@@ -135,6 +145,7 @@ async def attachment_stats():
               AND e.attachment_names IS NOT NULL
               AND json_valid(e.attachment_names)
               AND j.value IS NOT NULL AND j.value != ''
+              AND LOWER(j.value) NOT IN ('smime.p7s', 'smime.p7m')
             GROUP BY ext
             ORDER BY c DESC
             LIMIT 20

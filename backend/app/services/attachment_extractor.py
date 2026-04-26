@@ -18,7 +18,7 @@ from typing import Optional
 from app.config import DATA_DIR
 from app.database import get_db
 from app.logging_config import get_logger
-from app.utils.email_utils import decode_email_header
+from app.utils.email_utils import decode_email_header, _is_noise_attachment
 
 log = get_logger("attachments")
 
@@ -277,9 +277,12 @@ def list_extractable_attachments(email_id: int) -> list[dict]:
         else:
             part_filename = f"unnamed.{part.get_content_subtype()}"
 
+        content_type = part.get_content_type() or "application/octet-stream"
+        if _is_noise_attachment(part_filename, content_type):
+            continue
+
         payload = part.get_payload(decode=True)
         size = len(payload) if payload else 0
-        content_type = part.get_content_type() or "application/octet-stream"
 
         attachments.append({
             "filename": part_filename,

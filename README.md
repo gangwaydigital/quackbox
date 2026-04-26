@@ -38,7 +38,7 @@ QuackBox is a self-hosted email intelligence platform that transforms `.mbox` an
 - **Dark Mode** — Full dark theme toggle, with theme-aware Contacts directory and Threads list
 - **Keyboard Shortcuts** — Vim-style navigation (`g d`, `g e`, `g t`, `g c`, etc.)
 - **Setup Wizard** — First-run auto-detection with live import progress bar showing per-source counts and elapsed time
-- **Friendly Error Messages** — API failures surface user-readable messages (network down, server unavailable, not found) instead of raw HTTP details
+- **Friendly Error Messages** — API failures surface user-readable messages for network failures and bare HTTP statuses, but pass through informative server details (e.g. "Attachment not found — original mbox/emlx source must be accessible") so users see actionable explanations
 - **Empty States** — Icon-led, helpful empty states across Contacts and Threads (search vs. no-data hints)
 - **Accessible Modals** — Attachment preview modal traps focus, closes on Escape, restores focus on close, locks background scroll, and is announced with `role="dialog"` + `aria-labelledby`
 - **Export** — CSV export for emails, contacts, and threads; printable HTML thread export; single-email .eml export; attachment binary download from original source files
@@ -66,6 +66,8 @@ QuackBox is a self-hosted email intelligence platform that transforms `.mbox` an
 - **Validated Contact Merges** — Merging contacts now verifies every secondary address exists before any UPDATE, so an unknown address fails loudly instead of silently merging zero records (and returns a proper `404` when an address is missing, `400` when nothing was supplied)
 - **Audited JSON Skips** — Email rows whose `attachment_names` JSON is malformed are surfaced in the logs (with a sample of offending email IDs) rather than dropped silently
 - **Atomic Thread Rebuild** — Reconstructing threads now runs in a single transaction with batched `UPDATE`s; a mid-rebuild crash rolls back cleanly instead of leaving you with empty `threads` and nulled `thread_group_id`s
+- **Correct .emlx Storage** — Apple Mail `.emlx` files are stored as `<byte-count>\n<RFC822 message>\n<plist trailer>`. The parser now stores only the RFC822 portion as `raw_message`, and a one-time startup migration repairs any existing rows that contain the byte-count prefix or plist trailer — fixing attachment downloads and `.eml` exports for signed and multipart emails imported from `.emlx` archives
+- **S/MIME Noise Filtered** — `smime.p7s` and `smime.p7m` cryptographic signature parts are excluded from attachment listings, counts, and extraction. They're protocol metadata, not user content
 
 ---
 

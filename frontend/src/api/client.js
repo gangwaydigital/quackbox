@@ -29,11 +29,17 @@ class ApiError extends Error {
 }
 
 function friendlyMessage(status, detail) {
-  // Prefer a friendly mapping by status; fall back to API detail or a generic line.
-  const mapped = STATUS_MESSAGES[status]
-  if (mapped) return mapped
-  if (typeof detail === 'string' && detail.length < 140) return detail
-  return `Something went wrong (status ${status}).`
+  // Network failures: no useful detail to show, use the mapped message.
+  if (status === 0) return STATUS_MESSAGES[0]
+  // For HTTP errors, prefer the API's detail if it looks like a real explanation
+  // (longer than a bare status word like "Not Found"). The backend writes these
+  // intentionally — e.g. "Attachment X not found. The original mbox/emlx source
+  // file must be accessible." — and they're more useful than a generic mapping.
+  if (typeof detail === 'string') {
+    const trimmed = detail.trim()
+    if (trimmed.length > 16 && trimmed.length < 240) return trimmed
+  }
+  return STATUS_MESSAGES[status] || `Something went wrong (status ${status}).`
 }
 
 async function request(path, options = {}) {
