@@ -4,7 +4,7 @@
 
 QuackBox is a self-hosted email intelligence platform that transforms `.mbox` and Apple Mail archives into a searchable, analyzable knowledge base. Explore decades of email with AI-powered search, conversation threading, contact profiling, and interactive visualizations — all running locally in Docker.
 
-![Version](https://img.shields.io/badge/version-4.3.0-blue) ![Stack](https://img.shields.io/badge/stack-Python%20%7C%20React%20%7C%20SQLite-green) ![License](https://img.shields.io/badge/license-MIT-gray)
+![Version](https://img.shields.io/badge/version-4.4.0-blue) ![Stack](https://img.shields.io/badge/stack-Python%20%7C%20React%20%7C%20SQLite-green) ![License](https://img.shields.io/badge/license-MIT-gray)
 
 ---
 
@@ -44,7 +44,16 @@ QuackBox is a self-hosted email intelligence platform that transforms `.mbox` an
 - **Accessible Modals** — Attachment preview modal traps focus, closes on Escape, restores focus on close, locks background scroll, and is announced with `role="dialog"` + `aria-labelledby`
 - **Export** — CSV export for emails, contacts, and threads; printable HTML thread export; single-email .eml export; attachment binary download from original source files
 - **Configurable Data Path** — Point `DATA_PATH` to any directory via `.env` instead of copying files
-- **Auto Re-Import (Watcher)** — Set `WATCH_INTERVAL_MINUTES=15` in `.env` to have the backend periodically scan `DATA_PATH` and incrementally ingest any new email content. Status visible at `/api/ingest/watcher`
+- **Auto Re-Import (Watcher)** — Set `WATCH_INTERVAL_MINUTES=15` in `.env` to have the backend periodically scan `DATA_PATH` and incrementally ingest any new email content. Status panel + "Scan now" button on the Mailboxes page (no more `.env`-only). Endpoint at `/api/ingest/watcher`
+- **Events** — Meeting invites + `.ics` attachments extracted into a searchable timeline view, with organizer / attendees / location / status / time-range / link back to the source email
+- **Bulk Attachment Zip** — Download up to 500 attachments matching any filter (search, sender, mailbox) as a single archive grouped into `YYYY-MM/` folders
+
+### v4.4.0 What's New
+- **Events** — new sidebar entry that surfaces every meeting invite + `.ics` attachment hiding in your archive. Organizer, attendees, location, status, time range, and a link back to the source email. Backed by the `icalendar` library so timezones and recurrences parse properly. Run "Index events" once to scan all your imported emails
+- **Bulk attachment archive** — "Zip N" button on the Attachments page downloads up to 500 attachments matching the current filter as a single zip, grouped into `YYYY-MM/` folders inside the archive with collision-safe naming
+- **Topic clustering UX** — fixed a `NameError` that crashed every clustering run, added live progress polling with embedding count + percentage, a Cancel button so a 30-90 minute run can be aborted (already-completed embeddings stay persisted), and resume-on-mount if a job is in flight
+- **Watcher status panel** — the background auto-import watcher is no longer `.env`-only. Mailboxes page shows enabled/interval/last check/runs count, plus a "Scan now" button to bypass the next tick
+- **Reproducible installs** — `frontend/package-lock.json` now committed
 
 ### v4.3.0 What's New
 - **Background watcher** — when `WATCH_INTERVAL_MINUTES` is set, the backend periodically scans `DATA_PATH` and runs an incremental ingest whenever new mail arrives. No-op when the disk is unchanged. Optional `WATCH_ON_STARTUP=true` triggers an immediate scan on boot. Status visible at `/api/ingest/watcher`
