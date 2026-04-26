@@ -272,6 +272,18 @@ GET  /api/export/thread/{id}/html  # Printable thread export
 
 ## Development
 
+A `Makefile` wraps the common flows:
+
+```bash
+make help        # list available targets
+make rebuild     # docker compose up --build
+make logs        # tail backend logs
+make test        # run the backend test suite
+make test-cov    # tests + coverage report
+```
+
+Or use `docker compose` directly:
+
 ```bash
 # Backend only (hot-reload via volume mount)
 docker compose up backend
@@ -283,7 +295,13 @@ cd frontend && npm run dev
 docker compose logs -f backend
 ```
 
-The database persists in a Docker volume (`db-data`). Email data lives in `data/` which is gitignored.
+The database persists in a Docker volume (`db-data`). Email data lives in `data/` (or wherever `DATA_PATH` points) and is gitignored.
+
+### Tests
+
+`backend/tests/` contains pytest coverage of the parsers (mbox + emlx), email utilities, the .emlx raw-message migration, and the contact-merge service — the most regression-prone areas. Run with `make test`.
+
+The suite is intentionally fast (under a second) and uses synthetic mbox/emlx fixtures built in-memory; no real email data is required.
 
 ---
 
