@@ -4,7 +4,7 @@
 
 QuackBox is a self-hosted email intelligence platform that transforms `.mbox` and Apple Mail archives into a searchable, analyzable knowledge base. Explore decades of email with AI-powered search, conversation threading, contact profiling, and interactive visualizations — all running locally in Docker.
 
-![Version](https://img.shields.io/badge/version-4.4.0-blue) ![Stack](https://img.shields.io/badge/stack-Python%20%7C%20React%20%7C%20SQLite-green) ![License](https://img.shields.io/badge/license-MIT-gray)
+![Version](https://img.shields.io/badge/version-4.5.0-blue) ![Stack](https://img.shields.io/badge/stack-Python%20%7C%20React%20%7C%20SQLite-green) ![License](https://img.shields.io/badge/license-MIT-gray)
 
 ---
 
@@ -47,6 +47,13 @@ QuackBox is a self-hosted email intelligence platform that transforms `.mbox` an
 - **Auto Re-Import (Watcher)** — Set `WATCH_INTERVAL_MINUTES=15` in `.env` to have the backend periodically scan `DATA_PATH` and incrementally ingest any new email content. Status panel + "Scan now" button on the Mailboxes page (no more `.env`-only). Endpoint at `/api/ingest/watcher`
 - **Events** — Meeting invites + `.ics` attachments extracted into a searchable timeline view, with organizer / attendees / location / status / time-range / link back to the source email
 - **Bulk Attachment Zip** — Download up to 500 attachments matching any filter (search, sender, mailbox) as a single archive grouped into `YYYY-MM/` folders
+
+### v4.5.0 What's New
+- **In-app folder picker** — first-run setup wizard and the Mailboxes page now have a real directory browser for selecting mailbox sources, replacing the "edit `.env` and restart" flow. Each folder is shown with email-artifact badges (mbox / emlx counts, Apple-Mail-bundle detection) so you know what you're picking. The container reads `/Users` and `/Volumes` read-only via new `/host` mounts; path-traversal attempts are rejected before they touch the filesystem
+- **Multi-folder ingestion** — registered folders are persisted in a new `ingest_folders` table and scanned on every import alongside the legacy `DATA_PATH`. The watcher and attachment extractor read from all of them too. Folders that become unreachable (drive unplugged) are skipped with a warning, not a crash
+- **Embedding model picker** — Topics page header surfaces the active model and lists installed alternatives + curated suggestions. README documents the speed/quality tradeoffs (`all-minilm` runs ~5× faster than the default `nomic-embed-text` at slightly lower quality)
+- **Embedding ETA + throughput** — clustering progress now shows live rate (`12.4/s`) and remaining time estimate (`~14m left`) using a rolling 30-second window
+- **Tests:** 174 → 198 passing in ~2.3s
 
 ### v4.4.0 What's New
 - **Events** — new sidebar entry that surfaces every meeting invite + `.ics` attachment hiding in your archive. Organizer, attendees, location, status, time range, and a link back to the source email. Backed by the `icalendar` library so timezones and recurrences parse properly. Run "Index events" once to scan all your imported emails
