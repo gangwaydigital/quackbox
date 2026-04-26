@@ -21,16 +21,16 @@ function MethodBadge({ method }) {
 
 function EmailRow({ email, isCanonical }) {
   return (
-    <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm ${isCanonical ? 'bg-green-50 border border-green-200' : 'bg-gray-50'}`}>
+    <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm ${isCanonical ? 'bg-green-50 dark:bg-green-900/40 border border-green-200 dark:border-green-800' : 'bg-gray-50 dark:bg-gray-800/50'}`}>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           {isCanonical && (
-            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-green-700 bg-green-100 px-1.5 py-0.5 rounded">
+            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/40 px-1.5 py-0.5 rounded">
               <CheckCircle className="w-2.5 h-2.5" /> KEEP
             </span>
           )}
           <Link to={`/email/${email.id}`}
-            className="font-medium text-gray-800 hover:text-blue-600 truncate">
+            className="font-medium text-gray-800 dark:text-gray-200 hover:text-blue-600 truncate">
             {email.subject || '(no subject)'}
           </Link>
         </div>
@@ -68,16 +68,16 @@ function DuplicateGroup({ group, onDelete, onDismiss }) {
   }
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+    <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
       <button
         onClick={() => setExpanded(e => !e)}
-        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left">
+        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors text-left">
         <div className="flex-shrink-0 text-gray-400">
           {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-medium text-gray-800 truncate text-sm">
+            <span className="font-medium text-gray-800 dark:text-gray-200 truncate text-sm">
               {group.canonical.subject || '(no subject)'}
             </span>
             <MethodBadge method={group.detection_method} />
@@ -91,13 +91,13 @@ function DuplicateGroup({ group, onDelete, onDismiss }) {
           <button
             onClick={handleDismiss}
             title="Not duplicates — dismiss"
-            className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+            className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors">
             <X className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={handleDelete}
             disabled={deleting}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-600 text-xs font-medium rounded-lg hover:bg-red-100 border border-red-200 transition-colors disabled:opacity-50">
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 dark:bg-red-900/40 text-red-600 dark:text-red-300 text-xs font-medium rounded-lg hover:bg-red-100 border border-red-200 dark:border-red-800 transition-colors disabled:opacity-50">
             {deleting ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
             Delete {group.duplicates.length}
           </button>
@@ -105,7 +105,7 @@ function DuplicateGroup({ group, onDelete, onDismiss }) {
       </button>
 
       {expanded && (
-        <div className="border-t border-gray-100 p-3 space-y-1.5 bg-gray-50/50">
+        <div className="border-t border-gray-100 dark:border-gray-800 p-3 space-y-1.5 bg-gray-50/50 dark:bg-gray-800/30">
           <EmailRow email={group.canonical} isCanonical />
           {group.duplicates.map(dup => (
             <EmailRow key={dup.id} email={dup} isCanonical={false} />
@@ -177,7 +177,7 @@ export default function Deduplication() {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
           <Copy className="w-5 h-5 text-purple-600" />
           Deduplication
           {data && (
@@ -224,13 +224,13 @@ export default function Deduplication() {
       {loading ? (
         <div className="space-y-3">
           {Array.from({ length: 5 }, (_, i) => (
-            <div key={i} className="h-16 bg-white border border-gray-200 rounded-xl animate-pulse" />
+            <div key={i} className="h-16 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl animate-pulse" />
           ))}
         </div>
       ) : !hasGroups ? (
-        <div className="bg-white border border-gray-200 rounded-xl p-12 text-center">
+        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-12 text-center">
           <CheckCircle className="w-10 h-10 text-green-400 mx-auto mb-3" />
-          <h3 className="text-base font-semibold text-gray-700 mb-1">
+          <h3 className="text-base font-semibold text-gray-700 dark:text-gray-300 mb-1">
             {data === null ? 'No scan run yet' : 'No duplicates found'}
           </h3>
           <p className="text-sm text-gray-400 max-w-xs mx-auto">
@@ -258,7 +258,7 @@ export default function Deduplication() {
               <button
                 disabled={page <= 1}
                 onClick={() => load(page - 1)}
-                className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg disabled:opacity-40 hover:bg-gray-50">
+                className="px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-800/50">
                 Previous
               </button>
               <span className="text-sm text-gray-500">
@@ -267,7 +267,7 @@ export default function Deduplication() {
               <button
                 disabled={page >= data.total_pages}
                 onClick={() => load(page + 1)}
-                className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg disabled:opacity-40 hover:bg-gray-50">
+                className="px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-700 rounded-lg disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-800/50">
                 Next
               </button>
             </div>

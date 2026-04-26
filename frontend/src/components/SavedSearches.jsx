@@ -46,7 +46,7 @@ function SaveRow({ search, isActive, onRun, onDelete }) {
       </div>
 
       {search.run_count > 0 && (
-        <span className="text-[10px] text-gray-300 flex-shrink-0 hidden group-hover:hidden">
+        <span className="text-[10px] text-gray-300 dark:text-gray-600 flex-shrink-0 hidden group-hover:hidden">
           {search.run_count}×
         </span>
       )}
@@ -54,7 +54,7 @@ function SaveRow({ search, isActive, onRun, onDelete }) {
       {/* Delete */}
       <button
         onClick={e => { e.stopPropagation(); setConfirmDelete(true) }}
-        className="flex-shrink-0 opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-red-50 hover:text-red-500 text-gray-300 transition-all"
+        className="flex-shrink-0 opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-red-50 hover:text-red-500 text-gray-300 dark:text-gray-600 transition-all"
         title="Delete saved search">
         {confirmDelete
           ? <Check className="w-3.5 h-3.5 text-red-500" onClick={e => { e.stopPropagation(); onDelete(search.id); setConfirmDelete(false) }} />
@@ -109,7 +109,7 @@ function SaveDialog({ currentFilters, onSave, onCancel }) {
           Save
         </button>
         <button onClick={onCancel}
-          className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+          className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
           <X className="w-3 h-3" />
         </button>
       </div>
@@ -181,9 +181,9 @@ export default function SavedSearches({ onRun, activeId, currentFilters }) {
       {/* List */}
       {searches.length === 0 && !showSave ? (
         <div className="px-2 py-3 text-center">
-          <Search className="w-5 h-5 text-gray-200 mx-auto mb-1" />
+          <Search className="w-5 h-5 text-gray-200 dark:text-gray-700 mx-auto mb-1" />
           <p className="text-xs text-gray-400">No saved searches yet.</p>
-          <p className="text-[10px] text-gray-300 mt-0.5">Run a search, then click + to save it.</p>
+          <p className="text-[10px] text-gray-300 dark:text-gray-600 mt-0.5">Run a search, then click + to save it.</p>
         </div>
       ) : (
         <div className="space-y-0.5">

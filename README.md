@@ -35,7 +35,7 @@ QuackBox is a self-hosted email intelligence platform that transforms `.mbox` an
 
 ### Interface
 - **Sidebar Navigation** — Collapsible left sidebar, persistent state, notification badges for unconfigured features
-- **Dark Mode** — Full dark theme toggle. Theme-aware across Dashboard, Contacts, Threads, Mailboxes, the email reader, and all charts (recharts axes, tooltips, and the activity heatmap palette adapt to light/dark)
+- **Dark Mode** — Full dark theme toggle, theme-aware across every view (Dashboard, Contacts, Threads, Mailboxes, email reader, Calendar, Timeline, Topics, Chat, Sentiment, Saved Searches, Setup Wizard, Filter Panel, Deduplication, Search) including all charts: recharts axes, tooltips, gridlines, and the activity heatmap palette adapt to light/dark
 - **Keyboard Shortcuts** — Vim-style navigation (`g d`, `g e`, `g t`, `g c`, etc.)
 - **Setup Wizard** — First-run auto-detection with live import progress bar showing per-source counts and elapsed time
 - **Friendly Error Messages** — API failures surface user-readable messages for network failures and bare HTTP statuses, but pass through informative server details (e.g. "Attachment not found — original mbox/emlx source must be accessible") so users see actionable explanations

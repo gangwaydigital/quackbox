@@ -65,7 +65,7 @@ export default function TopicClusters() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
           <Tags className="w-5 h-5 text-blue-600" />
           Topic Clusters
         </h2>
@@ -90,14 +90,14 @@ export default function TopicClusters() {
 
       {/* Status message */}
       {statusMessage && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-sm text-blue-700">
+        <div className="bg-blue-50 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-800 rounded-lg px-4 py-3 text-sm text-blue-700 dark:text-blue-300">
           {statusMessage}
         </div>
       )}
 
       {/* Ollama not available message */}
       {ollamaStatus && !ollamaStatus.available && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3 text-sm text-yellow-700">
+        <div className="bg-yellow-50 dark:bg-yellow-900/40 border border-yellow-200 dark:border-yellow-800 rounded-lg px-4 py-3 text-sm text-yellow-700 dark:text-yellow-300">
           Ollama is not running. Start Ollama and pull the embedding model:
           <code className="block mt-2 bg-yellow-100 px-3 py-1.5 rounded text-xs">
             ollama pull nomic-embed-text
@@ -109,8 +109,8 @@ export default function TopicClusters() {
       {loading ? (
         <div className="text-center py-12 text-gray-500">Loading topics...</div>
       ) : topics.length === 0 ? (
-        <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
-          <Tags className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+        <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-12 text-center">
+          <Tags className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
           <p className="text-gray-500 mb-2">No topics generated yet.</p>
           <p className="text-sm text-gray-400">
             Click "Run Clustering" to discover topics in your email archive.
@@ -119,22 +119,22 @@ export default function TopicClusters() {
       ) : (
         <div className="space-y-2">
           {topics.map(topic => (
-            <div key={topic.id} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+            <div key={topic.id} className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
               {/* Topic header */}
               <button
                 onClick={() => toggleTopic(topic.id)}
-                className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors text-left"
+                className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors text-left"
               >
                 <div className="flex items-center gap-3">
                   {expandedTopic === topic.id
                     ? <ChevronDown className="w-4 h-4 text-gray-400" />
                     : <ChevronRight className="w-4 h-4 text-gray-400" />}
                   <div>
-                    <span className="font-medium text-sm text-gray-900">{topic.label}</span>
+                    <span className="font-medium text-sm text-gray-900 dark:text-white">{topic.label}</span>
                     {topic.keywords.length > 0 && (
                       <div className="flex gap-1 mt-1">
                         {topic.keywords.slice(0, 5).map(kw => (
-                          <span key={kw} className="px-1.5 py-0.5 bg-gray-100 rounded text-xs text-gray-500">
+                          <span key={kw} className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-xs text-gray-500">
                             {kw}
                           </span>
                         ))}
@@ -150,18 +150,18 @@ export default function TopicClusters() {
 
               {/* Expanded email list */}
               {expandedTopic === topic.id && (
-                <div className="border-t border-gray-100 divide-y divide-gray-50">
+                <div className="border-t border-gray-100 dark:border-gray-800 divide-y divide-gray-50">
                   {(topicEmails[topic.id] || []).slice(0, 10).map(email => (
                     <Link
                       key={email.id}
                       to={`/email/${email.id}`}
-                      className="block px-8 py-2 hover:bg-gray-50 transition-colors"
+                      className="block px-8 py-2 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
                     >
                       <div className="flex items-center justify-between text-sm">
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className="text-gray-600 truncate">{email.sender_name || email.sender_email}</span>
+                          <span className="text-gray-600 dark:text-gray-400 truncate">{email.sender_name || email.sender_email}</span>
                           <span className="text-gray-400">—</span>
-                          <span className="text-gray-800 truncate">{email.subject || '(no subject)'}</span>
+                          <span className="text-gray-800 dark:text-gray-200 truncate">{email.subject || '(no subject)'}</span>
                         </div>
                         <span className="text-xs text-gray-400 whitespace-nowrap ml-4">
                           {email.date_sent ? new Date(email.date_sent).toLocaleDateString() : ''}

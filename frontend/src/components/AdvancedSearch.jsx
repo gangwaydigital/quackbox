@@ -147,7 +147,7 @@ export default function AdvancedSearch() {
         </div>
 
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{error}</div>
+          <div className="bg-red-50 dark:bg-red-900/40 border border-red-200 dark:border-red-800 rounded-lg p-3 text-sm text-red-700 dark:text-red-300">{error}</div>
         )}
 
         {loading && (
@@ -194,7 +194,7 @@ export default function AdvancedSearch() {
                                 dangerouslySetInnerHTML={{ __html: e.highlight_body }} />
                             )}
                           </div>
-                          {e.has_attachments && <Paperclip className="w-3 h-3 text-gray-300 flex-shrink-0" />}
+                          {e.has_attachments && <Paperclip className="w-3 h-3 text-gray-300 dark:text-gray-600 flex-shrink-0" />}
                         </button>
                       )
                     })}
