@@ -138,7 +138,9 @@ def _record_source_result(name: str, result: dict) -> None:
 
 
 def _post_ingest_warmup() -> None:
-    """Run cache warming + attachment indexing after a successful ingest."""
+    """Run cache warming + attachment + calendar indexing after a successful
+    ingest. Each step is best-effort — failure is logged but doesn't stop
+    the others."""
     try:
         from app.services.analytics import warm_cache
         warm_cache()
@@ -149,3 +151,8 @@ def _post_ingest_warmup() -> None:
         index_all_attachments()
     except Exception as e:
         log.warning("Attachment indexing failed (non-fatal): %s", e)
+    try:
+        from app.services.calendar_extractor import index_all_calendar_events
+        index_all_calendar_events()
+    except Exception as e:
+        log.warning("Calendar indexing failed (non-fatal): %s", e)
