@@ -4,7 +4,7 @@
 
 QuackBox is a self-hosted email intelligence platform that transforms `.mbox` and Apple Mail archives into a searchable, analyzable knowledge base. Explore decades of email with AI-powered search, conversation threading, contact profiling, and interactive visualizations — all running locally in Docker.
 
-![Version](https://img.shields.io/badge/version-4.2.0-blue) ![Stack](https://img.shields.io/badge/stack-Python%20%7C%20React%20%7C%20SQLite-green) ![License](https://img.shields.io/badge/license-MIT-gray)
+![Version](https://img.shields.io/badge/version-4.3.0-blue) ![Stack](https://img.shields.io/badge/stack-Python%20%7C%20React%20%7C%20SQLite-green) ![License](https://img.shields.io/badge/license-MIT-gray)
 
 ---
 
@@ -48,8 +48,10 @@ QuackBox is a self-hosted email intelligence platform that transforms `.mbox` an
 
 ### v4.3.0 What's New
 - **Background watcher** — when `WATCH_INTERVAL_MINUTES` is set, the backend periodically scans `DATA_PATH` and runs an incremental ingest whenever new mail arrives. No-op when the disk is unchanged. Optional `WATCH_ON_STARTUP=true` triggers an immediate scan on boot. Status visible at `/api/ingest/watcher`
+- **66% smaller initial JS bundle** — route components now lazy-load via `React.lazy()`, and recharts ships in its own chunk that downloads only on chart-bearing pages. Initial gzipped JS dropped from ~215 kB to ~72 kB; each route is its own ~5–15 kB chunk
+- **Dark mode parity** — every view (Dashboard, Threads, Calendar, Timeline, Chat, Sentiment, Topics, Saved Searches, Setup Wizard, Filter Panel, Deduplication, Search, Mailboxes, Contacts, email reader) now renders correctly in dark mode. Charts (axes, tooltips, gridlines, the activity heatmap palette) are theme-aware via a shared `useChartTheme` hook
 - **Refactored ingest runner** — the ingest worker + status are now in `app/services/ingest_runner.py`, shared between the manual `/api/ingest/start` endpoint and the watcher
-- **Watcher tests** — `backend/tests/test_watcher.py` covers the disabled path, lifecycle, tick behavior (skip while running, no-op on no work, dispatch on pending work), and `_has_pending_work` exception safety
+- **Expanded test coverage** — pytest suite went from 65 → 106 tests (~1s runtime) covering FTS5 search ranking + sanitization, attachment extraction, the .emlx migration, and the watcher lifecycle
 
 ### v4.2.0 What's New
 - **Apple Mail (.emlx) attachments now download correctly** — earlier builds stored the full `.emlx` file (byte-count prefix + plist trailer) as the raw message, breaking attachment extraction and `.eml` export for every signed/multipart email. Fixed with a one-time idempotent startup migration that repairs existing rows
