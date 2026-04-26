@@ -342,6 +342,14 @@ export default function AttachmentIndex() {
               <option value="name">By Name</option>
               <option value="type">By Type</option>
             </select>
+            {data && data.total > 0 && (
+              <a href={api.downloadAttachmentsZipUrl({ search: search || undefined, limit: 500 })}
+                title={`Download up to 500 ${search ? 'matching ' : ''}attachments as a single zip${data.total > 500 ? ' (capped at 500)' : ''}`}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                <Archive className="w-3.5 h-3.5" />
+                Zip {Math.min(data.total, 500)}{data.total > 500 ? ` of ${data.total.toLocaleString()}` : ''}
+              </a>
+            )}
           </div>
 
           {error && <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">{error}</div>}

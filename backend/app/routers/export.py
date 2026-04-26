@@ -1,13 +1,30 @@
 """Export endpoints — CSV, HTML, EML, and attachment downloads."""
+import io
+import json
+import re
+import zipfile
+import html as html_mod
+from typing import Optional
+
 from fastapi import APIRouter, Query, HTTPException
 from fastapi.responses import StreamingResponse, HTMLResponse, Response
-import io
-import html as html_mod
+
 from app.services.export import export_emails_csv, export_contacts_csv, export_threads_csv
 from app.services.attachment_extractor import (
     extract_attachment, list_extractable_attachments, export_eml,
 )
 from app.database import get_db
+from app.logging_config import get_logger
+from app.utils.email_utils import _is_noise_attachment
+
+log = get_logger("export")
+
+# Hard caps so a single zip request can't OOM the backend
+ZIP_MAX_FILES = 2000
+ZIP_DEFAULT_FILES = 500
+# Filename sanitization — keep alnum, dot, dash, underscore, space; replace
+# anything else (including path separators) with underscore
+_FILENAME_SAFE = re.compile(r"[^A-Za-z0-9._\- ]")
 
 router = APIRouter(prefix="/api/export", tags=["export"])
 
@@ -126,5 +143,148 @@ async def download_attachment(email_id: int, filename: str):
         headers={
             "Content-Disposition": f'attachment; filename="{result["filename"]}"',
             "Content-Length": str(len(result["data"])),
+        },
+    )
+
+
+# ── Bulk attachment archive ────────────────────────────────────────────────
+
+
+def _safe_zip_name(date_iso: Optional[str], email_id: int, filename: str) -> str:
+    """
+    Build a collision-free, path-safe entry name for the zip:
+      2024-01/<date>__<id>__<filename>
+
+    Grouping into year-month folders keeps a few hundred attachments
+    browsable. Including the email_id disambiguates same-named files
+    across different messages.
+    """
+    folder = (date_iso or "")[:7] or "unknown"
+    base = _FILENAME_SAFE.sub("_", filename or "")
+    # Collapse path-traversal-ish dot runs and leading dots so the output
+    # can't be interpreted as a parent reference by a careless extractor.
+    base = re.sub(r"\.{2,}", ".", base).lstrip(".")
+    base = base or "attachment"
+    return f"{folder}/{(date_iso or '')[:10]}__{email_id}__{base}"
+
+
+def _select_attachments_for_zip(
+    *, search: Optional[str], sender_email: Optional[str],
+    mbox_source: Optional[str], limit: int,
+) -> list[dict]:
+    """Build the candidate list of (email_id, filename, date_sent) tuples
+    that match the same filters the Attachments page shows. Hides smime
+    noise via the same DB-level filter as the listing endpoint."""
+    where = [
+        "e.has_attachments = 1",
+        "e.attachment_names IS NOT NULL",
+        "json_valid(e.attachment_names)",
+        "j.value IS NOT NULL",
+        "j.value != ''",
+        "LOWER(j.value) NOT IN ('smime.p7s', 'smime.p7m')",
+    ]
+    params: dict = {}
+    if search:
+        where.append("(LOWER(j.value) LIKE :pat OR LOWER(COALESCE(e.subject,'')) LIKE :pat)")
+        params["pat"] = f"%{search.lower()}%"
+    if sender_email:
+        where.append("e.sender_email = :sender")
+        params["sender"] = sender_email
+    if mbox_source:
+        where.append("e.mbox_source = :mbox")
+        params["mbox"] = mbox_source
+
+    sql = f"""
+        SELECT e.id AS email_id, e.date_sent, e.subject, j.value AS filename
+        FROM emails e, json_each(e.attachment_names) j
+        WHERE {' AND '.join(where)}
+        ORDER BY e.date_timestamp DESC
+        LIMIT :lim
+    """
+    with get_db() as conn:
+        rows = conn.execute(sql, {**params, "lim": limit}).fetchall()
+    return [dict(r) for r in rows]
+
+
+@router.get("/attachments.zip")
+async def export_attachments_zip(
+    search: Optional[str] = Query(None, description="Filename / subject substring filter"),
+    sender_email: Optional[str] = Query(None),
+    mbox_source: Optional[str] = Query(None),
+    limit: int = Query(ZIP_DEFAULT_FILES, ge=1, le=ZIP_MAX_FILES,
+                       description=f"Max files to include (default {ZIP_DEFAULT_FILES}, hard cap {ZIP_MAX_FILES})"),
+):
+    """
+    Stream a zip of attachments matching the given filters.
+
+    Filters mirror the Attachments page: search text, sender, mailbox.
+    smime.p7s noise is excluded automatically. Files are grouped into
+    YYYY-MM folders inside the zip, and each entry is prefixed with
+    the source email id + date so same-named attachments across
+    different messages don't collide.
+
+    The zip is built in memory; capped at `limit` files (max 2000) so
+    a single request can't blow up the backend. For larger archives,
+    narrow the filters or download per-email.
+    """
+    candidates = _select_attachments_for_zip(
+        search=search, sender_email=sender_email,
+        mbox_source=mbox_source, limit=limit,
+    )
+    if not candidates:
+        raise HTTPException(404, "No attachments match those filters.")
+
+    buf = io.BytesIO()
+    included = 0
+    skipped = 0
+    seen_names: set[str] = set()
+    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for cand in candidates:
+            email_id = cand["email_id"]
+            filename = cand["filename"]
+            if _is_noise_attachment(filename):  # belt-and-suspenders
+                skipped += 1
+                continue
+            extracted = extract_attachment(email_id, filename)
+            if not extracted:
+                skipped += 1
+                log.debug("Could not extract %s from email %d", filename, email_id)
+                continue
+            entry_name = _safe_zip_name(cand.get("date_sent"), email_id, extracted["filename"])
+            # In the unlikely case of a collision (same date+id+name), tack a counter
+            base_entry = entry_name
+            counter = 1
+            while entry_name in seen_names:
+                counter += 1
+                entry_name = f"{base_entry}.{counter}"
+            seen_names.add(entry_name)
+            zf.writestr(entry_name, extracted["data"])
+            included += 1
+
+    if included == 0:
+        raise HTTPException(404, "No attachments could be extracted (source files missing?).")
+
+    log.info(
+        "📦 attachments.zip: %d included, %d skipped, %d candidates considered",
+        included, skipped, len(candidates),
+    )
+
+    buf.seek(0)
+    body = buf.getvalue()
+    parts = []
+    if search: parts.append(re.sub(r"[^A-Za-z0-9_-]", "_", search)[:30])
+    if sender_email: parts.append(sender_email.split("@")[0])
+    if mbox_source: parts.append(re.sub(r"[^A-Za-z0-9_-]", "_", mbox_source)[:30])
+    suffix = "-".join(parts) if parts else "all"
+    download_name = f"quackbox-attachments-{suffix}-{included}.zip"
+
+    return Response(
+        content=body,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="{download_name}"',
+            "Content-Length": str(len(body)),
+            "X-Quackbox-Included": str(included),
+            "X-Quackbox-Skipped": str(skipped),
         },
     )
