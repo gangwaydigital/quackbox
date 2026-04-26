@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Paperclip, Search, FileText, Image, Film, Music, Archive, File, Code,
@@ -6,6 +6,8 @@ import {
 } from 'lucide-react'
 import { api } from '../api/client'
 import { OnboardingBanner } from './OnboardingTips'
+
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
 const EXT_ICONS = {
   pdf: FileText, doc: FileText, docx: FileText, txt: FileText, rtf: FileText,
@@ -34,6 +36,9 @@ function PreviewModal({ attachment, onClose }) {
   const [preview, setPreview] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const dialogRef = useRef(null)
+  const previousFocusRef = useRef(null)
+  const titleId = `preview-modal-title-${attachment.email_id}-${attachment.filename}`
 
   useEffect(() => {
     setLoading(true); setError(null)
@@ -42,18 +47,60 @@ function PreviewModal({ attachment, onClose }) {
       .catch(err => { setError(String(err.message || err)); setLoading(false) })
   }, [attachment])
 
+  // Focus management + Escape-to-close + focus trap
+  useEffect(() => {
+    previousFocusRef.current = document.activeElement
+    // Move focus into the dialog so screen readers and keyboard users land here
+    const firstFocusable = dialogRef.current?.querySelector(FOCUSABLE)
+    firstFocusable?.focus()
+
+    const handleKey = (e) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        onClose()
+        return
+      }
+      if (e.key !== 'Tab' || !dialogRef.current) return
+      const focusables = dialogRef.current.querySelectorAll(FOCUSABLE)
+      if (focusables.length === 0) return
+      const first = focusables[0]
+      const last = focusables[focusables.length - 1]
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+      }
+    }
+
+    document.addEventListener('keydown', handleKey)
+    // Lock background scroll while open
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    return () => {
+      document.removeEventListener('keydown', handleKey)
+      document.body.style.overflow = prevOverflow
+      // Restore focus to whatever opened the modal
+      previousFocusRef.current?.focus?.()
+    }
+  }, [onClose])
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(0,0,0,0.5)' }}
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden">
+      <div ref={dialogRef}
+        role="dialog" aria-modal="true" aria-labelledby={titleId}
+        className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden">
         <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100 dark:border-gray-800">
           <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
             style={{ backgroundColor: getColor(attachment.extension) + '18' }}>
             <FileText className="w-4 h-4" style={{ color: getColor(attachment.extension) }} />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="font-semibold text-gray-900 dark:text-white text-sm truncate">{attachment.filename}</div>
+            <div id={titleId} className="font-semibold text-gray-900 dark:text-white text-sm truncate">{attachment.filename}</div>
             <div className="text-xs text-gray-400 truncate">{attachment.subject}</div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
@@ -61,7 +108,7 @@ function PreviewModal({ attachment, onClose }) {
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-blue-50 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors">
               <Download className="w-3.5 h-3.5" /> Download
             </a>
-            <button onClick={onClose}
+            <button onClick={onClose} aria-label="Close preview"
               className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors text-gray-400">
               <X className="w-4 h-4" />
             </button>

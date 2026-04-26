@@ -40,6 +40,7 @@ QuackBox is a self-hosted email intelligence platform that transforms `.mbox` an
 - **Setup Wizard** — First-run auto-detection with live import progress bar showing per-source counts and elapsed time
 - **Friendly Error Messages** — API failures surface user-readable messages (network down, server unavailable, not found) instead of raw HTTP details
 - **Empty States** — Icon-led, helpful empty states across Contacts and Threads (search vs. no-data hints)
+- **Accessible Modals** — Attachment preview modal traps focus, closes on Escape, restores focus on close, locks background scroll, and is announced with `role="dialog"` + `aria-labelledby`
 - **Export** — CSV export for emails, contacts, and threads; printable HTML thread export; single-email .eml export; attachment binary download from original source files
 - **Configurable Data Path** — Point `DATA_PATH` to any directory via `.env` instead of copying files
 
@@ -62,8 +63,9 @@ QuackBox is a self-hosted email intelligence platform that transforms `.mbox` an
 
 ### Reliability
 - **Diagnostic Parse Failures** — Mbox parser logs `Message-ID`, subject, file source, byte offset, and stack on parse errors instead of swallowing them as a one-line warning
-- **Validated Contact Merges** — Merging contacts now verifies every secondary address exists before any UPDATE, so an unknown address fails loudly instead of silently merging zero records
+- **Validated Contact Merges** — Merging contacts now verifies every secondary address exists before any UPDATE, so an unknown address fails loudly instead of silently merging zero records (and returns a proper `404` when an address is missing, `400` when nothing was supplied)
 - **Audited JSON Skips** — Email rows whose `attachment_names` JSON is malformed are surfaced in the logs (with a sample of offending email IDs) rather than dropped silently
+- **Atomic Thread Rebuild** — Reconstructing threads now runs in a single transaction with batched `UPDATE`s; a mid-rebuild crash rolls back cleanly instead of leaving you with empty `threads` and nulled `thread_group_id`s
 
 ---
 
@@ -89,13 +91,20 @@ cp ~/path/to/All\ mail.mbox data/
 cp -r ~/Library/Mail/V10 data/     # Apple Mail
 ```
 
-**Option B** — Point to an existing mail directory:
+**Option B** — Point to an existing mail directory (no copy required):
+
+```bash
+cp .env.example .env
+# then edit .env and set DATA_PATH to your archive
+```
+
+Or one-liner:
 
 ```bash
 echo "DATA_PATH=/Users/you/Library/Mail/V10" > .env
 ```
 
-Any path works — external drives, Google Takeout folders, Thunderbird profiles, etc. See `.env.example` for more examples.
+Any path works — external drives, Google Takeout folders, Thunderbird profiles, etc. For backup directories you never want QuackBox to write to, also set `DATA_MOUNT_MODE=ro` in `.env` for a read-only bind mount.
 
 ### 2. (Optional) Start Ollama
 

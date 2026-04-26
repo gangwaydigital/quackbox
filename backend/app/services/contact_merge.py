@@ -95,12 +95,12 @@ def merge_contacts(primary_email: str, secondary_emails: list):
         ).fetchone()
 
         if not primary:
-            return {"error": f"Primary contact {primary_email} not found"}
+            return {"error": f"Primary contact {primary_email} not found", "status": 404}
 
         # Validate every secondary exists — otherwise the merge looks successful but does nothing
         targets = [e for e in secondary_emails if e and e != primary_email]
         if not targets:
-            return {"error": "No secondary contacts to merge"}
+            return {"error": "No secondary contacts to merge", "status": 400}
 
         placeholders = ",".join("?" for _ in targets)
         existing = {
@@ -111,7 +111,7 @@ def merge_contacts(primary_email: str, secondary_emails: list):
         }
         missing = [e for e in targets if e not in existing]
         if missing:
-            return {"error": f"Secondary contact(s) not found: {', '.join(missing)}"}
+            return {"error": f"Secondary contact(s) not found: {', '.join(missing)}", "status": 404}
 
         primary_name = primary["sender_name"]
         total_updated = 0
