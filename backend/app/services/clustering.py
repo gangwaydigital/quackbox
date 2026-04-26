@@ -24,6 +24,9 @@ from app.config import (
     MIN_CLUSTER_SIZE,
 )
 from app.database import get_db
+from app.logging_config import get_logger
+
+log = get_logger("clustering")
 
 
 def check_ollama_available() -> bool:
@@ -334,7 +337,7 @@ def _extract_keywords(subjects: list[str], bodies: list[str], top_n: int = 10) -
     }
 
     word_counts = Counter()
-    for text in subjects + [b[:300] for b in bodies]:
+    for text in (subjects or []) + [(b or "")[:300] for b in (bodies or [])]:
         if not text:
             continue
         words = text.lower().split()
