@@ -322,6 +322,13 @@ export default function AttachmentIndex() {
         </>
       ) : (
         <>
+          <OnboardingBanner id="attachment-smime-noise">
+            QuackBox hides <code className="font-mono text-[11px] px-1 py-0.5 bg-white/60 dark:bg-gray-700/60 rounded">smime.p7s</code> /
+            <code className="font-mono text-[11px] px-1 py-0.5 bg-white/60 dark:bg-gray-700/60 rounded mx-0.5">smime.p7m</code>
+            files from this list — they're S/MIME cryptographic signatures attached to every digitally-signed email,
+            not user content. The original message bytes (including the signature) are still preserved in the
+            <code className="font-mono text-[11px] px-1 py-0.5 bg-white/60 dark:bg-gray-700/60 rounded mx-0.5">.eml</code> export.
+          </OnboardingBanner>
           <div className="flex items-center gap-3 flex-wrap">
             <div className="relative flex-1 min-w-[180px]">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />

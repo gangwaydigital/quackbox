@@ -35,11 +35,12 @@ QuackBox is a self-hosted email intelligence platform that transforms `.mbox` an
 
 ### Interface
 - **Sidebar Navigation** — Collapsible left sidebar, persistent state, notification badges for unconfigured features
-- **Dark Mode** — Full dark theme toggle, with theme-aware Contacts directory and Threads list
+- **Dark Mode** — Full dark theme toggle. Theme-aware across Dashboard, Contacts, Threads, Mailboxes, the email reader, and all charts (recharts axes, tooltips, and the activity heatmap palette adapt to light/dark)
 - **Keyboard Shortcuts** — Vim-style navigation (`g d`, `g e`, `g t`, `g c`, etc.)
 - **Setup Wizard** — First-run auto-detection with live import progress bar showing per-source counts and elapsed time
 - **Friendly Error Messages** — API failures surface user-readable messages for network failures and bare HTTP statuses, but pass through informative server details (e.g. "Attachment not found — original mbox/emlx source must be accessible") so users see actionable explanations
-- **Empty States** — Icon-led, helpful empty states across Contacts and Threads (search vs. no-data hints)
+- **Empty States** — Icon-led, helpful empty states across Contacts, Threads, Mailboxes, and the email reader (search vs. no-data hints)
+- **Inline UX Explainers** — First-visit hints explain non-obvious behavior (e.g. why `smime.p7s` files don't appear in the attachment list)
 - **Accessible Modals** — Attachment preview modal traps focus, closes on Escape, restores focus on close, locks background scroll, and is announced with `role="dialog"` + `aria-labelledby`
 - **Export** — CSV export for emails, contacts, and threads; printable HTML thread export; single-email .eml export; attachment binary download from original source files
 - **Configurable Data Path** — Point `DATA_PATH` to any directory via `.env` instead of copying files

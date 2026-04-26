@@ -3,6 +3,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { Users, ArrowLeft, Search, Mail, Clock, MessageSquare, Download, Activity, GitMerge } from 'lucide-react'
 import { api } from '../api/client'
+import { useChartTheme } from '../hooks/useChartTheme'
 import SentimentDashboard from './Sentiment'
 import ContactMerge from './ContactMerge'
 
@@ -135,6 +136,7 @@ export function ContactProfile() {
   const navigate = useNavigate()
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
+  const chart = useChartTheme()
 
   useEffect(() => {
     setLoading(true)
@@ -149,35 +151,41 @@ export function ContactProfile() {
       <div className="skeleton h-48 rounded-xl" />
     </div>
   )
-  if (!profile) return <div className="p-8 text-center text-gray-400">Contact not found</div>
+  if (!profile) return (
+    <div className="max-w-4xl mx-auto p-12 text-center bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800">
+      <Users className="w-10 h-10 text-gray-300 dark:text-gray-700 mx-auto mb-3" />
+      <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Contact not found</p>
+      <p className="text-xs text-gray-400 mt-1">The address may have been merged or deleted.</p>
+    </div>
+  )
 
   const rs = profile.relationship_score || {}
 
   return (
     <div className="max-w-4xl mx-auto space-y-4">
-      <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700">
+      <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
         <ArrowLeft className="w-4 h-4" /> Back
       </button>
 
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6">
         <div className="flex items-start gap-4">
-          <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center text-2xl font-bold text-blue-600">
+          <div className="w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-2xl font-bold text-blue-600 dark:text-blue-300">
             {(profile.sender_name || profile.sender_email).charAt(0).toUpperCase()}
           </div>
           <div className="flex-1">
-            <h2 className="text-xl font-semibold text-gray-900">{profile.sender_name || profile.sender_email}</h2>
-            <div className="text-sm text-gray-500">{profile.sender_email}</div>
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{profile.sender_name || profile.sender_email}</h2>
+            <div className="text-sm text-gray-500 dark:text-gray-400">{profile.sender_email}</div>
             {profile.known_names?.length > 1 && (
               <div className="text-xs text-gray-400 mt-1">Also known as: {profile.known_names.join(', ')}</div>
             )}
           </div>
           <div className="text-right">
-            <div className="text-3xl font-bold text-blue-600">{rs.score || 0}</div>
+            <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">{rs.score || 0}</div>
             <div className="text-xs text-gray-400">{rs.label || 'unknown'}</div>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-5 pt-5 border-t border-gray-100">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-5 pt-5 border-t border-gray-100 dark:border-gray-800">
           <MS icon={Mail} label="Total Emails" value={profile.total_emails?.toLocaleString()} />
           <MS icon={MessageSquare} label="Threads" value={profile.thread_count} />
           <MS icon={Clock} label="First Contact" value={profile.first_seen ? new Date(profile.first_seen).toLocaleDateString() : '—'} />
@@ -187,8 +195,8 @@ export function ContactProfile() {
         {rs.breakdown && (
           <div className="flex gap-2 mt-4">
             {Object.entries(rs.breakdown).map(([key, val]) => (
-              <div key={key} className="flex-1 bg-gray-50 rounded-lg p-2 text-center">
-                <div className="text-lg font-bold text-gray-700">{val}</div>
+              <div key={key} className="flex-1 bg-gray-50 dark:bg-gray-800 rounded-lg p-2 text-center">
+                <div className="text-lg font-bold text-gray-700 dark:text-gray-200">{val}</div>
                 <div className="text-[10px] text-gray-400 capitalize">{key}</div>
               </div>
             ))}
@@ -197,28 +205,29 @@ export function ContactProfile() {
       </div>
 
       {profile.monthly_volume?.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">Communication Over Time</h3>
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5">
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">Communication Over Time</h3>
           <ResponsiveContainer width="100%" height={180}>
             <AreaChart data={profile.monthly_volume}>
-              <XAxis dataKey="month" tick={{ fontSize: 9 }} interval="preserveStartEnd"
+              <XAxis dataKey="month" {...chart.axisProps} tick={{ ...chart.axisProps.tick, fontSize: 9 }} interval="preserveStartEnd"
                 tickFormatter={v => { const [y, m] = v.split('-'); return m === '01' ? y : '' }} />
-              <YAxis tick={{ fontSize: 10 }} />
-              <Tooltip labelFormatter={v => { const [y, m] = v.split('-'); return new Date(y, m - 1).toLocaleString('default', { month: 'long', year: 'numeric' }) }} />
-              <Area type="monotone" dataKey="count" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.15} strokeWidth={1.5} />
+              <YAxis {...chart.axisProps} />
+              <Tooltip {...chart.tooltipProps}
+                labelFormatter={v => { const [y, m] = v.split('-'); return new Date(y, m - 1).toLocaleString('default', { month: 'long', year: 'numeric' }) }} />
+              <Area type="monotone" dataKey="count" stroke="#3b82f6" fill="#3b82f6" fillOpacity={chart.dark ? 0.25 : 0.15} strokeWidth={1.5} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">When They Email</h3>
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5">
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">When They Email</h3>
           {profile.peak_hours?.length > 0 && (
             <div className="mb-3">
               <div className="text-xs text-gray-400 mb-1">Peak Hours</div>
               <div className="flex gap-2">{profile.peak_hours.map((h, i) => (
-                <span key={i} className="px-2.5 py-1 bg-blue-50 rounded text-sm text-blue-700 font-medium">{h.hour}:00 <span className="text-xs text-blue-400">({h.count})</span></span>
+                <span key={i} className="px-2.5 py-1 bg-blue-50 dark:bg-blue-900/40 rounded text-sm text-blue-700 dark:text-blue-300 font-medium">{h.hour}:00 <span className="text-xs text-blue-400">({h.count})</span></span>
               ))}</div>
             </div>
           )}
@@ -226,16 +235,16 @@ export function ContactProfile() {
             <div>
               <div className="text-xs text-gray-400 mb-1">Peak Days</div>
               <div className="flex gap-2">{profile.peak_days.map((d, i) => (
-                <span key={i} className="px-2.5 py-1 bg-purple-50 rounded text-sm text-purple-700 font-medium">{d.day} <span className="text-xs text-purple-400">({d.count})</span></span>
+                <span key={i} className="px-2.5 py-1 bg-purple-50 dark:bg-purple-900/40 rounded text-sm text-purple-700 dark:text-purple-300 font-medium">{d.day} <span className="text-xs text-purple-400">({d.count})</span></span>
               ))}</div>
             </div>
           )}
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">Mailboxes</h3>
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5">
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">Mailboxes</h3>
           <div className="space-y-1.5">{profile.mailboxes?.map((m, i) => (
             <div key={i} className="flex items-center justify-between text-sm">
-              <span className="text-gray-700">{m.name}</span>
+              <span className="text-gray-700 dark:text-gray-300">{m.name}</span>
               <span className="text-gray-400 font-medium">{m.count}</span>
             </div>
           ))}</div>
@@ -243,23 +252,23 @@ export function ContactProfile() {
       </div>
 
       {profile.top_subjects?.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">Most Common Subjects</h3>
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5">
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">Most Common Subjects</h3>
           <div className="space-y-1.5">{profile.top_subjects.slice(0, 8).map((s, i) => (
             <div key={i} className="flex items-center gap-3 text-sm">
               <span className="w-6 text-right text-xs text-gray-400">{s.count}</span>
-              <span className="text-gray-700 truncate">{s.subject}</span>
+              <span className="text-gray-700 dark:text-gray-300 truncate">{s.subject}</span>
             </div>
           ))}</div>
         </div>
       )}
 
       {profile.recent_emails?.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">Recent Emails</h3>
-          <div className="divide-y divide-gray-100">{profile.recent_emails.map(e => (
-            <Link key={e.id} to={`/email/${e.id}`} className="block py-2 hover:bg-gray-50 rounded px-2 -mx-2">
-              <div className="text-sm text-gray-800 truncate">{e.subject || '(no subject)'}</div>
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5">
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">Recent Emails</h3>
+          <div className="divide-y divide-gray-100 dark:divide-gray-800">{profile.recent_emails.map(e => (
+            <Link key={e.id} to={`/email/${e.id}`} className="block py-2 hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded px-2 -mx-2">
+              <div className="text-sm text-gray-800 dark:text-gray-200 truncate">{e.subject || '(no subject)'}</div>
               <div className="text-xs text-gray-400">{e.date_sent ? new Date(e.date_sent).toLocaleDateString() : ''} · {e.mbox_source}</div>
             </Link>
           ))}</div>
