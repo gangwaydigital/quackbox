@@ -123,6 +123,12 @@ export const api = {
   getEmailAttachments: (id) => request(`/export/email/${id}/attachments`),
   downloadAttachmentUrl: (emailId, filename) => `${BASE}/export/email/${emailId}/attachment/${encodeURIComponent(filename)}`,
   downloadEmlUrl: (emailId) => `${BASE}/export/email/${emailId}/eml`,
+  downloadAttachmentsZipUrl: (params = {}) => {
+    const q = new URLSearchParams()
+    Object.entries(params).forEach(([k, v]) => { if (v != null && v !== '') q.set(k, v) })
+    const qs = q.toString()
+    return `${BASE}/export/attachments.zip${qs ? `?${qs}` : ''}`
+  },
   getSettings: () => request('/settings'),
   // Bookmarks
   getBookmarks: (page = 1) => request(`/bookmarks?page=${page}`),
