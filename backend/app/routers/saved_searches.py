@@ -3,8 +3,53 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 from app.database import get_db
+from app.services.search import _sanitize_fts_query, BM25_WEIGHTS
 
 router = APIRouter(prefix="/api/saved-searches", tags=["saved_searches"])
+
+
+def _count_matches_for_search(conn, s: dict) -> Optional[int]:
+    """
+    Count how many emails match a saved-search row right now.
+
+    Mirrors the query/filter logic of GET /api/emails/advanced-search
+    so the sidebar's "12 emails" badge always agrees with what the user
+    sees when they click through. Returns None if the count fails
+    (e.g. malformed FTS query).
+    """
+    conditions: list[str] = []
+    params: list = []
+    use_fts = bool(s.get("query") and str(s["query"]).strip())
+
+    if use_fts:
+        params.append(_sanitize_fts_query(s["query"]))
+        fts_join = "JOIN emails_fts ON emails_fts.rowid = e.id AND emails_fts MATCH ?"
+    else:
+        fts_join = ""
+
+    if s.get("sender"):
+        conditions.append("(e.sender_email LIKE ? OR e.sender_name LIKE ?)")
+        params.extend([f"%{s['sender']}%", f"%{s['sender']}%"])
+    if s.get("date_from"):
+        conditions.append("e.date_sent >= ?")
+        params.append(s["date_from"])
+    if s.get("date_to"):
+        date_to = s["date_to"]
+        conditions.append("e.date_sent <= ?")
+        params.append(date_to + "T23:59:59" if len(date_to) == 10 else date_to)
+    if s.get("mbox_source"):
+        conditions.append("e.mbox_source = ?")
+        params.append(s["mbox_source"])
+    if s.get("has_attachments"):
+        conditions.append("e.has_attachments = 1")
+
+    where = " AND ".join(conditions) if conditions else "1=1"
+    try:
+        return conn.execute(
+            f"SELECT COUNT(*) FROM emails e {fts_join} WHERE {where}", params,
+        ).fetchone()[0]
+    except Exception:
+        return None
 
 
 class SavedSearchCreate(BaseModel):
@@ -24,7 +69,13 @@ class SavedSearchUpdate(BaseModel):
 
 
 @router.get("")
-async def list_saved_searches():
+async def list_saved_searches(with_counts: bool = True):
+    """
+    List all saved searches. Returns a `count` field for each (number of
+    emails currently matching the search) when with_counts=true, so the
+    sidebar can show live badges. Disable with `?with_counts=false` if
+    callers want the cheaper read.
+    """
     with get_db() as conn:
         rows = conn.execute("""
             SELECT id, name, query, sender, date_from, date_to,
@@ -33,7 +84,11 @@ async def list_saved_searches():
             FROM saved_searches
             ORDER BY run_count DESC, created_at DESC
         """).fetchall()
-    return {"searches": [dict(r) for r in rows]}
+        items = [dict(r) for r in rows]
+        if with_counts:
+            for s in items:
+                s["count"] = _count_matches_for_search(conn, s)
+    return {"searches": items}
 
 
 @router.post("")

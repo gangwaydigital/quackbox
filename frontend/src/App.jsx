@@ -15,6 +15,7 @@ import FilterPanel from './components/FilterPanel'
 import EmailPane from './components/EmailPane'
 import SetupWizard from './components/SetupWizard'
 import ImportStatus from './components/ImportStatus'
+import SidebarSmartFolders from './components/SidebarSmartFolders'
 
 // Lazy-loaded — each route gets its own JS chunk that only downloads when
 // the user navigates to it. Heavy chart-bearing pages (Dashboard, Mailboxes,
@@ -159,6 +160,9 @@ export default function App() {
               )
             })}
           </nav>
+
+          {/* Smart folders (saved searches) */}
+          <SidebarSmartFolders open={sidebarOpen} />
 
           {/* Bottom actions */}
           <div className="border-t border-gray-100 dark:border-gray-800 py-2 px-1.5 space-y-0.5">
