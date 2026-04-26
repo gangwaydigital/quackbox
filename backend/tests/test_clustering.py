@@ -100,6 +100,70 @@ class TestMakeTopicLabel:
         assert clustering._make_topic_label(["project"]) == "Project"
 
 
+class TestGenerateAllEmbeddingsProgressCallback:
+    """Verify the progress_callback hook fires correctly without breaking the loop."""
+
+    def _seed(self, db_path, n_emails: int):
+        from app import database
+        with database.get_db(db_path) as conn:
+            for i in range(n_emails):
+                conn.execute(
+                    "INSERT INTO emails (subject, sender_name, body_text) VALUES (?, ?, ?)",
+                    (f"Subject {i}", f"sender{i}@x.com", f"body content {i}"),
+                )
+
+    def _patched_clustering(self, tmp_path, monkeypatch):
+        from app import database
+        db_path = tmp_path / "embed.db"
+        database.init_db(db_path)
+        real_get_db = database.get_db
+
+        def get_db_override(p=db_path):
+            return real_get_db(p)
+        monkeypatch.setattr(clustering, "get_db", get_db_override)
+        return db_path
+
+    def test_callback_fires_on_zero_then_completion_for_empty_db(self, tmp_path, monkeypatch):
+        """With no emails, callback should still fire once at start (0/0) and once at end."""
+        self._patched_clustering(tmp_path, monkeypatch)
+        calls = []
+        with patch.object(clustering, "generate_embedding", return_value=None):
+            clustering.generate_all_embeddings(progress_callback=lambda d, t: calls.append((d, t)))
+        # Initial 0/0 + final 0/0 (deduped is fine if both 0/0)
+        assert (0, 0) in calls
+
+    def test_callback_fires_at_batch_boundaries(self, tmp_path, monkeypatch):
+        db_path = self._patched_clustering(tmp_path, monkeypatch)
+        self._seed(db_path, 5)
+        calls = []
+        with patch.object(clustering, "generate_embedding", return_value=[0.1] * 768):
+            clustering.generate_all_embeddings(
+                batch_size=2,
+                progress_callback=lambda d, t: calls.append((d, t)),
+            )
+        # Expect callbacks at: start(0,5), batch(2,5), batch(4,5), final(5,5)
+        assert (0, 5) in calls
+        assert (2, 5) in calls
+        assert (4, 5) in calls
+        assert (5, 5) in calls
+
+    def test_callback_exception_does_not_break_embedding_loop(self, tmp_path, monkeypatch):
+        """If the caller's callback raises, embedding generation should keep going."""
+        db_path = self._patched_clustering(tmp_path, monkeypatch)
+        self._seed(db_path, 3)
+
+        def angry_callback(done, total):
+            raise RuntimeError("boom")
+
+        with patch.object(clustering, "generate_embedding", return_value=[0.1] * 768):
+            result = clustering.generate_all_embeddings(
+                batch_size=1, progress_callback=angry_callback,
+            )
+        # All 3 emails should still be embedded despite the angry callback
+        assert result["generated"] == 3
+        assert result["errors"] == 0
+
+
 class TestCheckOllamaAvailable:
     def test_returns_false_on_connection_error(self):
         with patch("app.services.clustering.requests.get",

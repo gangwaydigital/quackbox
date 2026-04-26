@@ -16,23 +16,58 @@ from app.services.search import filter_emails
 
 router = APIRouter(prefix="/api/topics", tags=["topics"])
 
-# Background task tracking
-_task_status = {"running": False, "progress": "", "result": None, "error": None}
+# Background task tracking. Mutated in-place (never reassigned) so callers
+# always read the latest values; assigning a new dict would break holders.
+_task_status = {
+    "running": False, "phase": "idle", "progress": "",
+    "embeddings_done": 0, "embeddings_total": 0,
+    "result": None, "error": None,
+}
 _executor = ThreadPoolExecutor(max_workers=1)
+
+
+def _reset_status(phase: str = "starting", progress: str = "") -> None:
+    _task_status.update({
+        "running": True, "phase": phase, "progress": progress,
+        "embeddings_done": 0, "embeddings_total": 0,
+        "result": None, "error": None,
+    })
 
 
 def _run_clustering_sync(num_clusters, regenerate):
     """Run clustering in a background thread."""
-    global _task_status
     try:
-        _task_status = {"running": True, "progress": "Generating embeddings...", "result": None, "error": None}
-        embed_result = generate_all_embeddings(regenerate=regenerate)
-        _task_status["progress"] = "Clustering topics..."
+        _reset_status(phase="embedding", progress="Generating embeddings...")
+
+        def on_embed_progress(done: int, total: int) -> None:
+            _task_status["embeddings_done"] = done
+            _task_status["embeddings_total"] = total
+            if total > 0:
+                pct = round(done / total * 100)
+                _task_status["progress"] = f"Generating embeddings: {done:,} / {total:,} ({pct}%)"
+            else:
+                _task_status["progress"] = "Generating embeddings…"
+
+        embed_result = generate_all_embeddings(
+            regenerate=regenerate, progress_callback=on_embed_progress,
+        )
+        _task_status["phase"] = "clustering"
+        _task_status["progress"] = "Clustering topics…"
         result = cluster_topics(num_clusters=num_clusters)
         result["embedding_stats"] = embed_result
-        _task_status = {"running": False, "progress": "Done", "result": result, "error": None}
+        _task_status.update({
+            "running": False, "phase": "done",
+            "progress": (
+                f"Done — {result.get('num_clusters', 0)} topics "
+                f"from {result.get('total_emails_clustered', 0):,} emails"
+            ),
+            "result": result, "error": None,
+        })
     except Exception as e:
-        _task_status = {"running": False, "progress": "", "result": None, "error": str(e)}
+        _task_status.update({
+            "running": False, "phase": "error", "progress": "",
+            "result": None, "error": str(e),
+        })
 
 
 @router.get("")
@@ -57,6 +92,33 @@ async def get_topic_detail(topic_id: int, page: int = Query(1, ge=1), page_size:
     return {**topic, "emails": emails}
 
 
+def _run_embed_only_sync(regenerate: bool) -> None:
+    """Run embedding generation in a background thread + report progress."""
+    try:
+        _reset_status(phase="embedding", progress="Generating embeddings…")
+
+        def on_embed_progress(done: int, total: int) -> None:
+            _task_status["embeddings_done"] = done
+            _task_status["embeddings_total"] = total
+            if total > 0:
+                pct = round(done / total * 100)
+                _task_status["progress"] = f"Generating embeddings: {done:,} / {total:,} ({pct}%)"
+
+        embed_result = generate_all_embeddings(
+            regenerate=regenerate, progress_callback=on_embed_progress,
+        )
+        _task_status.update({
+            "running": False, "phase": "done",
+            "progress": f"Done — {embed_result.get('generated', 0):,} embeddings generated",
+            "result": embed_result, "error": None,
+        })
+    except Exception as e:
+        _task_status.update({
+            "running": False, "phase": "error", "progress": "",
+            "result": None, "error": str(e),
+        })
+
+
 @router.post("/embed")
 async def generate_embeddings(regenerate: bool = False):
     if not check_ollama_available():
@@ -64,7 +126,7 @@ async def generate_embeddings(regenerate: bool = False):
     if _task_status["running"]:
         return {"message": "Already running", **_task_status}
     loop = asyncio.get_event_loop()
-    loop.run_in_executor(_executor, generate_all_embeddings, regenerate)
+    loop.run_in_executor(_executor, _run_embed_only_sync, regenerate)
     return {"message": "Embedding generation started in background. Check /api/topics/status for progress."}
 
 

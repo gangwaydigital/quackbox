@@ -84,13 +84,21 @@ def generate_embedding(text: str) -> Optional[list[float]]:
         return None
 
 
-def generate_all_embeddings(batch_size: int = 50, regenerate: bool = False) -> dict:
+def generate_all_embeddings(
+    batch_size: int = 50,
+    regenerate: bool = False,
+    progress_callback=None,
+) -> dict:
     """
     Generate embeddings for all emails that don't have them yet.
 
     Args:
         batch_size: Number of emails to process between commits
         regenerate: If True, regenerate all embeddings
+        progress_callback: Optional callable invoked as fn(done, total) every
+            batch_size emails so callers (e.g. the topics router) can surface
+            live progress. Errors in the callback are swallowed so they can't
+            break the embedding loop.
 
     Returns:
         dict with processing statistics
@@ -99,6 +107,14 @@ def generate_all_embeddings(batch_size: int = 50, regenerate: bool = False) -> d
     generated = 0
     skipped = 0
     errors = 0
+
+    def _emit(done: int, total: int) -> None:
+        if progress_callback is None:
+            return
+        try:
+            progress_callback(done, total)
+        except Exception:
+            log.exception("progress_callback raised; ignoring")
 
     with get_db() as conn:
         if regenerate:
@@ -115,6 +131,7 @@ def generate_all_embeddings(batch_size: int = 50, regenerate: bool = False) -> d
 
         total = len(rows)
         log.info("🧠 Generating embeddings for %d emails...", total)
+        _emit(0, total)
 
         for i, row in enumerate(rows):
             # Create embedding input: combine subject + sender + body snippet
@@ -143,6 +160,10 @@ def generate_all_embeddings(batch_size: int = 50, regenerate: bool = False) -> d
             if (i + 1) % batch_size == 0:
                 conn.commit()
                 log.debug("  ... %d/%d (%d generated)", i + 1, total, generated)
+                _emit(i + 1, total)
+
+        # Final emit so callers see 100%
+        _emit(total, total)
 
     duration = time.time() - start
     result = {
