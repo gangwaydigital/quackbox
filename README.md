@@ -4,7 +4,7 @@
 
 QuackBox is a self-hosted email intelligence platform that transforms `.mbox` and Apple Mail archives into a searchable, analyzable knowledge base. Explore decades of email with AI-powered search, conversation threading, contact profiling, and interactive visualizations — all running locally in Docker.
 
-![Version](https://img.shields.io/badge/version-4.1.2-blue) ![Stack](https://img.shields.io/badge/stack-Python%20%7C%20React%20%7C%20SQLite-green) ![License](https://img.shields.io/badge/license-MIT-gray)
+![Version](https://img.shields.io/badge/version-4.2.0-blue) ![Stack](https://img.shields.io/badge/stack-Python%20%7C%20React%20%7C%20SQLite-green) ![License](https://img.shields.io/badge/license-MIT-gray)
 
 ---
 
@@ -43,6 +43,15 @@ QuackBox is a self-hosted email intelligence platform that transforms `.mbox` an
 - **Accessible Modals** — Attachment preview modal traps focus, closes on Escape, restores focus on close, locks background scroll, and is announced with `role="dialog"` + `aria-labelledby`
 - **Export** — CSV export for emails, contacts, and threads; printable HTML thread export; single-email .eml export; attachment binary download from original source files
 - **Configurable Data Path** — Point `DATA_PATH` to any directory via `.env` instead of copying files
+
+### v4.2.0 What's New
+- **Apple Mail (.emlx) attachments now download correctly** — earlier builds stored the full `.emlx` file (byte-count prefix + plist trailer) as the raw message, breaking attachment extraction and `.eml` export for every signed/multipart email. Fixed with a one-time idempotent startup migration that repairs existing rows
+- **S/MIME signature noise hidden** — `smime.p7s` / `smime.p7m` parts no longer pollute attachment listings or counts
+- **`DATA_PATH` actually works** — `.env` overrides the data bind-mount; `DATA_MOUNT_MODE=ro` makes it read-only. New `.env.example` ships with the project
+- **Atomic thread rebuild** — single transaction with batched updates; mid-rebuild crash rolls back cleanly
+- **Accessible attachment preview modal** — focus trap, Escape closes, focus restored on close, proper ARIA roles
+- **Friendlier API errors** — network failures and bare statuses get user-readable messages, but informative server detail still passes through
+- **Polish** — dark-mode variants and icon-led empty states across Contacts and Threads
 
 ### v4.1.0 New Features
 - **Thread List View** — Thread summary cards with expandable email trees in chronological order
