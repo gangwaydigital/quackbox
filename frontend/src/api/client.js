@@ -75,7 +75,6 @@ export const api = {
   getSources: () => request(`/emails/sources`),
   getTopics: () => request('/topics'),
   getTopic: (id, page = 1) => request(`/topics/${id}?page=${page}`),
-  generateEmbeddings: (r = false) => request(`/topics/embed?regenerate=${r}`, { method: 'POST' }),
   runClustering: (n = null) => request('/topics/cluster', { method: 'POST', body: JSON.stringify({ num_clusters: n, regenerate_embeddings: false }) }),
   checkOllama: () => request('/topics/status/ollama'),
   getClusteringStatus: () => request('/topics/status'),

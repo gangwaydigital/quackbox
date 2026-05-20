@@ -192,61 +192,6 @@ async def get_topic_detail(topic_id: int, page: int = Query(1, ge=1), page_size:
     return {**topic, "emails": emails}
 
 
-def _run_embed_only_sync(regenerate: bool) -> None:
-    """Run embedding generation in a background thread + report progress."""
-    try:
-        _reset_status(phase="embedding", progress="Generating embeddings…")
-        tracker = _RateTracker()
-
-        def on_embed_progress(done: int, total: int) -> None:
-            tracker.record(done)
-            rate = tracker.rate_per_second()
-            eta = tracker.eta_seconds(total)
-            _task_status["embeddings_done"] = done
-            _task_status["embeddings_total"] = total
-            _task_status["embeddings_per_second"] = round(rate, 2) if rate else None
-            _task_status["eta_seconds"] = eta
-            if total > 0:
-                pct = round(done / total * 100)
-                base = f"Generating embeddings: {done:,} / {total:,} ({pct}%)"
-                eta_str = _format_eta(eta)
-                _task_status["progress"] = f"{base} · {eta_str}" if eta_str else base
-
-        embed_result = generate_all_embeddings(
-            regenerate=regenerate, progress_callback=on_embed_progress,
-        )
-        if embed_result.get("cancelled"):
-            _task_status.update({
-                "running": False, "phase": "cancelled",
-                "progress": (
-                    f"Cancelled — {embed_result.get('generated', 0):,} embeddings persisted"
-                ),
-                "result": embed_result, "error": None,
-            })
-        else:
-            _task_status.update({
-                "running": False, "phase": "done",
-                "progress": f"Done — {embed_result.get('generated', 0):,} embeddings generated",
-                "result": embed_result, "error": None,
-            })
-    except Exception as e:
-        _task_status.update({
-            "running": False, "phase": "error", "progress": "",
-            "result": None, "error": str(e),
-        })
-
-
-@router.post("/embed")
-async def generate_embeddings(regenerate: bool = False):
-    if not check_ollama_available():
-        raise HTTPException(503, "Ollama is not running or model not available. Run: ollama pull nomic-embed-text")
-    if _task_status["running"]:
-        return {"message": "Already running", **_task_status}
-    loop = asyncio.get_event_loop()
-    loop.run_in_executor(_executor, _run_embed_only_sync, regenerate)
-    return {"message": "Embedding generation started in background. Check /api/topics/status for progress."}
-
-
 @router.post("/cluster")
 async def run_clustering(request: ClusterRequest = ClusterRequest()):
     if not check_ollama_available():
