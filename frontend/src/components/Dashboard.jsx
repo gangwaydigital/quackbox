@@ -4,7 +4,6 @@ import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, R
 import { BarChart3, Users, Calendar, MessageSquare, Clock, TrendingUp, TrendingDown, Mail, RefreshCw, Layers, Search, Paperclip, ArrowRight, Zap } from 'lucide-react'
 import { api } from '../api/client'
 import { useChartTheme } from '../hooks/useChartTheme'
-import NetworkGraph from './NetworkGraph'
 import { OnboardingBanner } from './OnboardingTips'
 
 const COLORS = ['#3b82f6','#8b5cf6','#ec4899','#f59e0b','#10b981','#6366f1']
@@ -243,9 +242,6 @@ export default function Dashboard() {
           {heatmap ? <HeatGrid data={heatmap} dark={chart.dark}/> : <Skeleton h={420}/>}
         </div>
       </div>
-
-      {/* Communication Network */}
-      <NetworkGraph />
 
       {/* Year by Year */}
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">

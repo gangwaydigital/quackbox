@@ -39,7 +39,6 @@ DEFAULT_PAGE_SIZE = 50
 MAX_PAGE_SIZE = 200
 
 # -- Parsing --
-SUPPORTED_EXTENSIONS = {".mbox", ".mbox.gz"}
 MAX_BODY_LENGTH = 100_000
 
 # -- Watcher --
