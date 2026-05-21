@@ -6,6 +6,11 @@ export default defineConfig({
   server: {
     port: 5173,
     host: '0.0.0.0',
+    // Vite 5+ blocks requests whose Host header doesn't match an entry here.
+    // We're a self-hosted app behind the user's router, so allow any hostname
+    // — covers reverse proxies, .local mDNS names, dashboards like homepage,
+    // and access from phones / other LAN devices.
+    allowedHosts: true,
     proxy: {
       '/api': {
         target: process.env.API_URL || 'http://localhost:8000',
