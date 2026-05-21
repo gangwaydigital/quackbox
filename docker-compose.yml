@@ -73,6 +73,7 @@ services:
     volumes:
       - ./frontend/src:/app/src
       - ./frontend/index.html:/app/index.html
+      - ./frontend/vite.config.js:/app/vite.config.js
     environment:
       - API_URL=http://quackbox-backend:8000
     depends_on:
