@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, HTTPException, Query
 from app.config import DATA_DIR
 from app.models import IngestRequest, IngestResponse
-from app.services.indexer import ingest_mbox, ingest_all, get_source_status
+from app.services.indexer import ingest_mbox, ingest_all, get_source_status, backfill_external_attachments, scan_disk_attachments
 from app.services.emlx_parser import find_emlx_files
 from app.services.ingest_runner import INGEST_STATUS, run_ingest, is_ingest_running
 from app.services import watcher
@@ -99,6 +99,63 @@ async def ingest_progress():
 async def watcher_status():
     """Status of the background watcher loop (if enabled)."""
     return watcher.status()
+
+
+_backfill_status = {"running": False, "done": 0, "total": 0, "result": None, "error": None}
+
+
+def _run_backfill_sync():
+    global _backfill_status
+    try:
+        _backfill_status.update({
+            "running": True, "phase": "sibling-attachments",
+            "done": 0, "total": 0, "result": None, "error": None,
+        })
+
+        def on_progress(done: int, total: int) -> None:
+            _backfill_status["done"] = done
+            _backfill_status["total"] = total
+
+        sibling = backfill_external_attachments(progress_callback=on_progress)
+
+        # Phase 2: filesystem walk to catch orphaned attachments that don't
+        # have a matching .emlx sibling.
+        _backfill_status.update({
+            "phase": "disk-scan", "done": 0, "total": 0,
+        })
+
+        def on_disk_progress(scanned: int) -> None:
+            _backfill_status["done"] = scanned
+
+        disk = scan_disk_attachments(progress_callback=on_disk_progress)
+
+        _backfill_status.update({
+            "running": False, "phase": "done",
+            "result": {"sibling": sibling, "disk": disk},
+        })
+    except Exception as e:
+        log.exception("Backfill failed")
+        _backfill_status.update({"running": False, "phase": "error", "error": str(e)})
+
+
+@router.post("/backfill-attachments")
+async def trigger_backfill_attachments():
+    """
+    One-time scan: for every .emlx in every registered folder, find the
+    matching email row and pull in attachment filenames from the sibling
+    Attachments/ directory (Apple Mail stores binaries there, not inline
+    in the .emlx). Safe to re-run; idempotent.
+    """
+    if _backfill_status["running"]:
+        return {"message": "Backfill already running", **_backfill_status}
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(_executor, _run_backfill_sync)
+    return {"message": "Backfill started. Poll /api/ingest/backfill-attachments/status."}
+
+
+@router.get("/backfill-attachments/status")
+async def backfill_attachments_status():
+    return _backfill_status
 
 
 @router.post("/watcher/scan")

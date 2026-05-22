@@ -1,6 +1,9 @@
 """Attachment index endpoints."""
 import json
-from fastapi import APIRouter, Query
+import mimetypes
+from pathlib import Path
+from fastapi import APIRouter, Query, HTTPException
+from fastapi.responses import Response
 from app.database import get_db
 from app.logging_config import get_logger
 
@@ -205,3 +208,135 @@ async def trigger_indexing():
     loop = asyncio.get_event_loop()
     loop.run_in_executor(executor, index_all_attachments)
     return {"message": "Attachment indexing started in background"}
+
+
+# ── Disk-scanned attachments (Apple Mail Attachments/ trees) ───────────────
+
+
+@router.get("/disk")
+async def list_disk_attachments(
+    search: str = Query(None),
+    mailbox: str = Query(None, description="Filter by mailbox_hint"),
+    extension: str = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+):
+    """List attachments discovered by walking */Attachments/ on disk —
+    independent of whether we could link them to a specific email row."""
+    conditions: list[str] = []
+    params: dict = {}
+    if search:
+        conditions.append("LOWER(filename) LIKE :pat")
+        params["pat"] = f"%{search.lower()}%"
+    if mailbox:
+        conditions.append("mailbox_hint = :mbx")
+        params["mbx"] = mailbox
+    if extension:
+        conditions.append("extension = :ext")
+        params["ext"] = extension.lower().lstrip(".")
+    where = " AND ".join(conditions) if conditions else "1=1"
+    offset = (page - 1) * page_size
+
+    with get_db() as conn:
+        total = conn.execute(
+            f"SELECT COUNT(*) FROM disk_attachments WHERE {where}", params,
+        ).fetchone()[0]
+        rows = conn.execute(
+            f"""
+            SELECT id, file_path, filename, extension, size, mailbox_hint, file_mtime
+            FROM disk_attachments
+            WHERE {where}
+            ORDER BY file_mtime DESC, id DESC
+            LIMIT :ps OFFSET :off
+            """,
+            {**params, "ps": page_size, "off": offset},
+        ).fetchall()
+        # Top extensions in the filtered set
+        ext_rows = conn.execute(
+            f"""
+            SELECT COALESCE(NULLIF(extension, ''), 'other') AS ext, COUNT(*) AS c
+            FROM disk_attachments
+            WHERE {where}
+            GROUP BY ext
+            ORDER BY c DESC
+            LIMIT 15
+            """,
+            params,
+        ).fetchall()
+
+    return {
+        "items": [dict(r) for r in rows],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": max(1, (total + page_size - 1) // page_size),
+        "top_extensions": [{"ext": r["ext"], "count": r["c"]} for r in ext_rows],
+    }
+
+
+@router.get("/disk/stats")
+async def disk_attachments_stats():
+    with get_db() as conn:
+        total = conn.execute("SELECT COUNT(*) FROM disk_attachments").fetchone()[0]
+        mailboxes = conn.execute("""
+            SELECT mailbox_hint, COUNT(*) AS c
+            FROM disk_attachments
+            WHERE mailbox_hint IS NOT NULL
+            GROUP BY mailbox_hint
+            ORDER BY c DESC
+            LIMIT 20
+        """).fetchall()
+        ext_rows = conn.execute("""
+            SELECT COALESCE(NULLIF(extension, ''), 'other') AS ext, COUNT(*) AS c
+            FROM disk_attachments
+            GROUP BY ext
+            ORDER BY c DESC
+            LIMIT 20
+        """).fetchall()
+    return {
+        "total_files": total,
+        "top_mailboxes": [{"name": r["mailbox_hint"], "count": r["c"]} for r in mailboxes],
+        "top_extensions": [{"ext": r["ext"], "count": r["c"]} for r in ext_rows],
+    }
+
+
+@router.get("/disk/{att_id}/download")
+async def download_disk_attachment(att_id: int):
+    """Serve the file at the stored file_path. Security: the path must
+    fall inside one of the configured browse roots — we don't let an
+    arbitrary path leak via a bogus database row."""
+    from app.services.folders import HOST_ROOTS
+
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT file_path, filename FROM disk_attachments WHERE id = ?",
+            (att_id,),
+        ).fetchone()
+    if not row:
+        raise HTTPException(404, "Disk attachment not found.")
+
+    p = Path(row["file_path"]).resolve()
+    # The data dir is /app/data inside the container, OR a path under /host.
+    safe_roots = ["/app/data"] + list(HOST_ROOTS)
+    if not any(str(p).startswith(root) for root in safe_roots):
+        raise HTTPException(403, "Attachment path is outside permitted roots.")
+    if not p.is_file():
+        raise HTTPException(
+            404,
+            "File no longer exists on disk — drive unmounted or file moved.",
+        )
+
+    try:
+        data = p.read_bytes()
+    except OSError as e:
+        raise HTTPException(500, f"Could not read file: {e}")
+
+    ct, _ = mimetypes.guess_type(p.name)
+    return Response(
+        content=data,
+        media_type=ct or "application/octet-stream",
+        headers={
+            "Content-Disposition": f'attachment; filename="{row["filename"]}"',
+            "Content-Length": str(len(data)),
+        },
+    )

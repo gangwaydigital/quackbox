@@ -228,6 +228,74 @@ def _find_message(email_id: int):
     return None, None
 
 
+# ── External-attachment (Apple Mail) helpers ────────────────────
+
+import mimetypes
+
+
+def _external_attachment_path(email_id: int, filename: str) -> Optional[Path]:
+    """
+    For Apple Mail emails, look up the sibling Attachments/<numeric_id>/
+    directory via the stored source_path and find a file matching filename.
+    Returns the Path or None if not found / not applicable.
+    """
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT source_path FROM emails WHERE id = ?", (email_id,)
+        ).fetchone()
+    if not row or not row["source_path"]:
+        return None
+    emlx_path = Path(row["source_path"])
+    if not emlx_path.name.endswith(".emlx"):
+        return None
+    attach_dir = emlx_path.parent.parent / "Attachments" / emlx_path.stem
+    if not attach_dir.is_dir():
+        return None
+    # Apple stores files under part-numbered subdirs (2.2/, 2.4/, …).
+    # rglob handles both layouts: nested by part, or flat.
+    for p in attach_dir.rglob(filename):
+        if p.is_file():
+            return p
+    return None
+
+
+def _list_external_attachments(email_id: int) -> list[dict]:
+    """List externally-stored attachments for an Apple Mail email."""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT source_path FROM emails WHERE id = ?", (email_id,)
+        ).fetchone()
+    if not row or not row["source_path"]:
+        return []
+    emlx_path = Path(row["source_path"])
+    if not emlx_path.name.endswith(".emlx"):
+        return []
+    attach_dir = emlx_path.parent.parent / "Attachments" / emlx_path.stem
+    if not attach_dir.is_dir():
+        return []
+    items = []
+    try:
+        for p in attach_dir.rglob("*"):
+            if not p.is_file() or p.name.startswith("."):
+                continue
+            ct, _ = mimetypes.guess_type(p.name)
+            ct = ct or "application/octet-stream"
+            if _is_noise_attachment(p.name, ct):
+                continue
+            try:
+                size = p.stat().st_size
+            except OSError:
+                size = 0
+            items.append({
+                "filename": p.name,
+                "content_type": ct,
+                "size": size,
+            })
+    except (OSError, PermissionError):
+        pass
+    return items
+
+
 # ── Public API ─────────────────────────────────────────────────
 
 def extract_attachment(email_id: int, filename: str) -> Optional[dict]:
@@ -236,7 +304,27 @@ def extract_attachment(email_id: int, filename: str) -> Optional[dict]:
 
     Returns dict with 'data' (bytes), 'content_type', 'filename',
     or None if not found.
+
+    For Apple Mail emails, tries the on-disk Attachments/ sibling
+    directory first (where most attachments actually live) before
+    falling back to MIME parsing.
     """
+    # Fast path: file on disk in the sibling Attachments dir
+    disk = _external_attachment_path(email_id, filename)
+    if disk is not None:
+        try:
+            data = disk.read_bytes()
+        except OSError as e:
+            log.warning("Could not read external attachment %s: %s", disk, e)
+        else:
+            ct, _ = mimetypes.guess_type(disk.name)
+            return {
+                "data": data,
+                "content_type": ct or "application/octet-stream",
+                "filename": disk.name,
+            }
+
+    # Fallback: walk the MIME tree of the stored raw_message
     msg, row = _find_message(email_id)
     if msg is None:
         return None
@@ -271,40 +359,47 @@ def extract_attachment(email_id: int, filename: str) -> Optional[dict]:
 
 
 def list_extractable_attachments(email_id: int) -> list[dict]:
-    """List all attachments from an email with sizes and MIME types."""
-    msg, row = _find_message(email_id)
-    if msg is None:
-        return []
+    """List all attachments from an email with sizes and MIME types.
 
-    if not msg.is_multipart():
-        return []
+    Merges inline (MIME-tree) attachments and externally-stored ones
+    (Apple Mail sibling Attachments/ directory). Deduplicates by filename.
+    """
+    seen: dict[str, dict] = {}
 
-    attachments = []
-    for part in msg.walk():
-        content_disposition = str(part.get("Content-Disposition", ""))
-        if "attachment" not in content_disposition:
-            continue
+    # External (Apple Mail) — usually the majority
+    for item in _list_external_attachments(email_id):
+        seen[item["filename"]] = item
 
-        part_filename = part.get_filename()
-        if part_filename:
-            part_filename = decode_email_header(part_filename)
-        else:
-            part_filename = f"unnamed.{part.get_content_subtype()}"
+    # Inline (MIME tree) — for mbox + signed/encrypted emlx with embedded parts
+    msg, _ = _find_message(email_id)
+    if msg is not None and msg.is_multipart():
+        for part in msg.walk():
+            content_disposition = str(part.get("Content-Disposition", ""))
+            if "attachment" not in content_disposition:
+                continue
 
-        content_type = part.get_content_type() or "application/octet-stream"
-        if _is_noise_attachment(part_filename, content_type):
-            continue
+            part_filename = part.get_filename()
+            if part_filename:
+                part_filename = decode_email_header(part_filename)
+            else:
+                part_filename = f"unnamed.{part.get_content_subtype()}"
 
-        payload = part.get_payload(decode=True)
-        size = len(payload) if payload else 0
+            content_type = part.get_content_type() or "application/octet-stream"
+            if _is_noise_attachment(part_filename, content_type):
+                continue
+            if part_filename in seen:
+                continue
 
-        attachments.append({
-            "filename": part_filename,
-            "content_type": content_type,
-            "size": size,
-        })
+            payload = part.get_payload(decode=True)
+            size = len(payload) if payload else 0
 
-    return attachments
+            seen[part_filename] = {
+                "filename": part_filename,
+                "content_type": content_type,
+                "size": size,
+            }
+
+    return list(seen.values())
 
 
 def export_eml(email_id: int) -> Optional[dict]:

@@ -25,6 +25,7 @@ from app.utils.email_utils import (
     extract_body,
     extract_attachments,
     extract_thread_id,
+    _is_noise_attachment,
 )
 
 log = get_logger("emlx")
@@ -57,7 +58,55 @@ def parse_emlx_file(emlx_path: Path, source_name: str = None) -> Optional[dict]:
     # a byte-count prefix line and an Apple plist trailer that confuse later
     # re-parsing (the email library would see the digits as the body and miss
     # all the multipart structure, including signed attachments).
-    return _message_to_record(msg, source_name or "Unknown", raw_bytes=msg_bytes)
+    record = _message_to_record(msg, source_name or "Unknown", raw_bytes=msg_bytes)
+    if record is None:
+        return None
+    # Track the source .emlx path so the extractor can find sibling attachments
+    # later (Apple Mail stores attachment binaries in a sibling Attachments/
+    # directory keyed by the numeric .emlx filename — see external_attachments_for).
+    record["source_path"] = str(emlx_path)
+    # Merge in externally-stored attachment filenames so the listing API picks
+    # them up. The .emlx MIME tree usually doesn't carry the binaries.
+    external = external_attachment_filenames(emlx_path)
+    if external:
+        try:
+            inline = json.loads(record.get("attachment_names") or "[]")
+        except Exception:
+            inline = []
+        merged = list(dict.fromkeys(inline + external))  # preserve order, dedupe
+        record["attachment_names"] = json.dumps(merged)
+        record["has_attachments"] = 1 if merged else 0
+    return record
+
+
+def external_attachments_dir(emlx_path: Path) -> Optional[Path]:
+    """
+    Return the sibling Attachments/<numeric_id>/ directory for an .emlx
+    file, or None if that path doesn't exist. Apple Mail layout:
+       .../Data/N/M/Messages/12345.emlx
+       .../Data/N/M/Attachments/12345/<part>/<filename>
+    """
+    candidate = emlx_path.parent.parent / "Attachments" / emlx_path.stem
+    return candidate if candidate.is_dir() else None
+
+
+def external_attachment_filenames(emlx_path: Path) -> list[str]:
+    """List user-content filenames in the sibling Attachments/ dir, recursively.
+    Skips directories, hidden files, and S/MIME signature noise."""
+    root = external_attachments_dir(emlx_path)
+    if root is None:
+        return []
+    names: list[str] = []
+    try:
+        for p in root.rglob("*"):
+            if not p.is_file() or p.name.startswith("."):
+                continue
+            if _is_noise_attachment(p.name):
+                continue
+            names.append(p.name)
+    except (OSError, PermissionError):
+        pass
+    return names
 
 
 def _message_to_record(msg, source: str, raw_bytes: bytes = None) -> Optional[dict]:
