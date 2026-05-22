@@ -4,7 +4,7 @@
 
 QuackBox is a self-hosted email intelligence platform that transforms `.mbox` and Apple Mail archives into a searchable, analyzable knowledge base. Explore decades of email with AI-powered search, conversation threading, contact profiling, and interactive visualizations — all running locally in Docker.
 
-![Version](https://img.shields.io/badge/version-4.5.0-blue) ![Stack](https://img.shields.io/badge/stack-Python%20%7C%20React%20%7C%20SQLite-green) ![License](https://img.shields.io/badge/license-MIT-gray)
+![Version](https://img.shields.io/badge/version-4.6.0-blue) ![Stack](https://img.shields.io/badge/stack-Python%20%7C%20React%20%7C%20SQLite-green) ![License](https://img.shields.io/badge/license-MIT-gray)
 
 ---
 
@@ -47,6 +47,14 @@ QuackBox is a self-hosted email intelligence platform that transforms `.mbox` an
 - **Auto Re-Import (Watcher)** — Set `WATCH_INTERVAL_MINUTES=15` in `.env` to have the backend periodically scan `DATA_PATH` and incrementally ingest any new email content. Status panel + "Scan now" button on the Mailboxes page (no more `.env`-only). Endpoint at `/api/ingest/watcher`
 - **Events** — Meeting invites + `.ics` attachments extracted into a searchable timeline view, with organizer / attendees / location / status / time-range / link back to the source email
 - **Bulk Attachment Zip** — Download up to 500 attachments matching any filter (search, sender, mailbox) as a single archive grouped into `YYYY-MM/` folders
+
+### v4.6.0 What's New
+- **Apple Mail attachments finally visible** — V10 archives store attachment binaries in sibling `Attachments/<numeric_id>/<part>/` directories independently of the `.emlx` files, and many don't link cleanly to any single email. A real archive went from 24 attachments shown → **13,374** after this release. Two complementary paths: a sibling-dir match for the cases that DO link (augments the email row's `attachment_names`), and a filesystem walk that indexes every file under `*/Attachments/` regardless. Both run in a single backfill job, ~25s for a 50k-message archive
+- **New "On Disk" attachments tab** — search by filename, filter by mailbox (INBOX, Sent Messages, named sub-folders), download straight from disk. Path safety check ensures the file is under a configured `/host` root
+- **Diagnostic banner** on the Attachments page explains the Apple Mail issue and offers a one-click "Scan now" trigger for the backfill (idempotent — already-indexed files skipped, not duplicated)
+- **CLAUDE.md-driven cleanup** — dropped ~300 lines of dead code (unused `OnboardingTip`, redundant `NetworkGraph` treemap, orphan `/api/topics/embed` endpoint, `SUPPORTED_EXTENSIONS` config). Split `ImportStatus.jsx` (466 → 240 lines) into focused `WatcherPanel.jsx` + `IngestProgressPanel.jsx` siblings
+- **Vite host allowlist** — set to `true` so the app works behind reverse proxies, `.local` mDNS hostnames, and LAN aliases like `ai` without blocking with "Blocked request" errors
+- **Tests:** 179 → 206 passing in ~2.7s
 
 ### v4.5.0 What's New
 - **In-app folder picker** — first-run setup wizard and the Mailboxes page now have a real directory browser for selecting mailbox sources, replacing the "edit `.env` and restart" flow. Each folder is shown with email-artifact badges (mbox / emlx counts, Apple-Mail-bundle detection) so you know what you're picking. The container reads `/Users` and `/Volumes` read-only via new `/host` mounts; path-traversal attempts are rejected before they touch the filesystem
