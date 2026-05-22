@@ -83,6 +83,8 @@ export const api = {
   scanData: () => request('/ingest/scan'),
   getWatcherStatus: () => request('/ingest/watcher'),
   triggerWatcherScan: () => request('/ingest/watcher/scan', { method: 'POST' }),
+  backfillAttachments: () => request('/ingest/backfill-attachments', { method: 'POST' }),
+  backfillAttachmentsStatus: () => request('/ingest/backfill-attachments/status'),
   // Folder picker / registered ingest folders
   browseFolders: (path) => {
     const q = new URLSearchParams()
@@ -128,6 +130,9 @@ export const api = {
   getSentiment: () => request('/contacts/sentiment'),
   getAttachments: (params = {}) => { const q = new URLSearchParams(); Object.entries(params).forEach(([k, v]) => { if (v != null && v !== '') q.set(k, v) }); return request(`/attachments?${q}`) },
   getAttachmentStats: () => request('/attachments/stats'),
+  getDiskAttachments: (params = {}) => { const q = new URLSearchParams(); Object.entries(params).forEach(([k, v]) => { if (v != null && v !== '') q.set(k, v) }); return request(`/attachments/disk?${q}`) },
+  getDiskAttachmentStats: () => request('/attachments/disk/stats'),
+  downloadDiskAttachmentUrl: (id) => `${BASE}/attachments/disk/${id}/download`,
   // Attachment downloads & email export
   getEmailAttachments: (id) => request(`/export/email/${id}/attachments`),
   downloadAttachmentUrl: (emailId, filename) => `${BASE}/export/email/${emailId}/attachment/${encodeURIComponent(filename)}`,

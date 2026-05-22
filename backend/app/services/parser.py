@@ -133,6 +133,9 @@ def _parse_message(msg, source: str, raw_bytes: bytes = None) -> dict | None:
         "thread_id": thread_id,
         "has_attachments": has_attachments,
         "attachment_names": json.dumps(attachment_names),
+        # mbox messages are inline — no external attachments to look up later.
+        # The column exists for symmetry with the emlx parser.
+        "source_path": None,
     }
 
     # Store raw message bytes if provided (for .eml export)

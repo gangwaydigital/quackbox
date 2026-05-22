@@ -9,6 +9,76 @@ import { OnboardingBanner } from './OnboardingTips'
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
+
+function BackfillBanner({ status, onRun }) {
+  // Show only if it's running, just finished, or has an error to report.
+  // Otherwise a small permanent "Scan Apple Mail attachments" hint.
+  const running = status?.running
+  const result = status?.result
+  const error = status?.error
+  const pct = status?.total > 0
+    ? Math.min(100, Math.round((status.done / status.total) * 100))
+    : null
+
+  if (running) {
+    return (
+      <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700/50 rounded-lg px-4 py-3 space-y-2">
+        <div className="flex items-center gap-2 text-sm text-blue-700 dark:text-blue-300">
+          <RefreshCw className="w-4 h-4 animate-spin flex-shrink-0" />
+          <span className="font-medium flex-1">
+            Scanning Apple Mail folders for attachments…
+            {status.total > 0 && <> {status.done.toLocaleString()} / {status.total.toLocaleString()} files</>}
+          </span>
+        </div>
+        {pct !== null && (
+          <div className="h-1.5 bg-blue-100 dark:bg-blue-900/60 rounded-full overflow-hidden">
+            <div className="h-full bg-blue-500 dark:bg-blue-400 rounded-full transition-all"
+              style={{ width: `${pct}%` }} />
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700/50 rounded-lg px-4 py-3 text-sm text-red-700 dark:text-red-300">
+        Backfill failed: <code className="font-mono text-xs">{error}</code>
+      </div>
+    )
+  }
+
+  if (result?.updated > 0) {
+    return (
+      <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700/50 rounded-lg px-4 py-3 flex items-center gap-3 text-sm text-green-700 dark:text-green-300">
+        <span className="flex-1">
+          Done — {result.updated.toLocaleString()} emails updated with attachment lists
+          from their sibling Apple Mail Attachments folders.
+        </span>
+        <button onClick={onRun}
+          className="text-xs px-2 py-1 rounded border border-green-300 dark:border-green-700 hover:bg-green-100 dark:hover:bg-green-900/50">
+          Re-run
+        </button>
+      </div>
+    )
+  }
+
+  // Default state: small CTA encouraging the user to run this once
+  return (
+    <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700/50 rounded-lg px-4 py-3 flex items-start gap-3 text-sm">
+      <div className="flex-1 text-amber-800 dark:text-amber-200">
+        <strong>Missing attachments from Apple Mail?</strong> Apple stores attachment
+        binaries in a sibling <code className="font-mono text-xs px-1 bg-white/60 dark:bg-amber-900/60 rounded">Attachments/</code> folder, not inside the
+        <code className="font-mono text-xs px-1 bg-white/60 dark:bg-amber-900/60 rounded mx-1">.emlx</code> file. Run a one-time scan to index them.
+      </div>
+      <button onClick={onRun}
+        className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-amber-600 text-white rounded-lg hover:bg-amber-700">
+        <RefreshCw className="w-3 h-3" /> Scan now
+      </button>
+    </div>
+  )
+}
+
 const EXT_ICONS = {
   pdf: FileText, doc: FileText, docx: FileText, txt: FileText, rtf: FileText,
   xls: FileText, xlsx: FileText, csv: FileText, ppt: FileText, pptx: FileText,
@@ -266,6 +336,116 @@ function ContentSearch() {
   )
 }
 
+// ── Disk-scan attachments tab ──────────────────────────────────────────────
+
+function DiskAttachments() {
+  const [data, setData] = useState(null)
+  const [stats, setStats] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [mailbox, setMailbox] = useState('')
+  const [page, setPage] = useState(1)
+
+  const load = async (p = 1) => {
+    setLoading(true)
+    try {
+      const result = await api.getDiskAttachments({
+        search: search || undefined,
+        mailbox: mailbox || undefined,
+        page: p, page_size: 50,
+      })
+      setData(result); setPage(p)
+    } catch (err) {
+      console.error(err)
+    } finally { setLoading(false) }
+  }
+
+  useEffect(() => { load(1); api.getDiskAttachmentStats().then(setStats).catch(() => {}) }, [mailbox])
+  useEffect(() => { const t = setTimeout(() => load(1), 300); return () => clearTimeout(t) }, [search])
+
+  return (
+    <div className="space-y-3">
+      <div className="text-xs text-gray-500 dark:text-gray-400">
+        Files found by walking <code className="font-mono px-1 bg-gray-100 dark:bg-gray-800 rounded">Attachments/</code> directories in every registered folder.
+        These show even when we can't link them back to a specific email — useful for archives where the .emlx files have been pruned but the attachments remain.
+      </div>
+
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[180px]">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+          <input type="text" value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Search filenames…"
+            className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white" />
+        </div>
+        {stats?.top_mailboxes?.length > 0 && (
+          <select value={mailbox} onChange={e => setMailbox(e.target.value)}
+            className="text-xs border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 dark:bg-gray-800 dark:text-white">
+            <option value="">All mailboxes</option>
+            {stats.top_mailboxes.map(m => (
+              <option key={m.name} value={m.name}>{m.name} ({m.count.toLocaleString()})</option>
+            ))}
+          </select>
+        )}
+      </div>
+
+      {stats && (
+        <div className="text-[11px] text-gray-400">
+          {stats.total_files.toLocaleString()} files indexed across {stats.top_mailboxes.length} mailboxes
+        </div>
+      )}
+
+      <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800">
+        {loading ? (
+          <div className="p-4 space-y-2">{Array.from({ length: 8 }, (_, i) => (
+            <div key={i} className="h-12 bg-gray-100 dark:bg-gray-800 animate-pulse rounded-lg" />
+          ))}</div>
+        ) : !data?.items?.length ? (
+          <div className="p-8 text-center text-gray-400 text-sm">
+            {data?.total === 0
+              ? 'No disk attachments indexed yet. Click "Scan now" on the Browse tab to run the scan.'
+              : 'No files match your search.'}
+          </div>
+        ) : data.items.map(a => {
+          const Icon = getIcon(a.extension)
+          return (
+            <div key={a.id} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                style={{ backgroundColor: getColor(a.extension) + '18' }}>
+                <Icon className="w-4 h-4" style={{ color: getColor(a.extension) }} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{a.filename}</div>
+                <div className="text-[11px] text-gray-400 truncate">
+                  {a.mailbox_hint && <span>{a.mailbox_hint} · </span>}
+                  {(a.size / 1024).toFixed(0)} KB
+                </div>
+              </div>
+              <a href={api.downloadDiskAttachmentUrl(a.id)} download
+                className="flex-shrink-0 p-1.5 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 text-gray-400 hover:text-blue-600 transition-colors"
+                title={`Download ${a.filename}`}>
+                <Download className="w-4 h-4" />
+              </a>
+            </div>
+          )
+        })}
+      </div>
+
+      {data && (data.total_pages || 1) > 1 && (
+        <div className="flex items-center justify-between text-sm text-gray-500">
+          <span>Page {data.page} of {data.total_pages}</span>
+          <div className="flex gap-2">
+            <button onClick={() => load(page - 1)} disabled={page <= 1}
+              className="px-3 py-1 rounded border border-gray-200 dark:border-gray-700 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-800">Prev</button>
+            <button onClick={() => load(page + 1)} disabled={page >= data.total_pages}
+              className="px-3 py-1 rounded border border-gray-200 dark:border-gray-700 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-800">Next</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+
 // ── Main Component ─────────────────────────────────────────────────────────
 
 export default function AttachmentIndex() {
@@ -277,6 +457,8 @@ export default function AttachmentIndex() {
   const [page, setPage] = useState(1)
   const [tab, setTab] = useState('browse')
   const [previewAttachment, setPreviewAttachment] = useState(null)
+  const [backfill, setBackfill] = useState(null)
+  const pollRef = useRef(null)
 
   const load = async (p = 1) => {
     setLoading(true); setError(null)
@@ -290,6 +472,42 @@ export default function AttachmentIndex() {
 
   useEffect(() => { load(1) }, [sortBy])
   useEffect(() => { const t = setTimeout(() => load(1), 300); return () => clearTimeout(t) }, [search])
+
+  // Resume backfill polling on mount if a job is already running
+  useEffect(() => {
+    api.backfillAttachmentsStatus().then(s => {
+      setBackfill(s)
+      if (s.running) startBackfillPoll()
+    }).catch(() => {})
+    return () => stopBackfillPoll()
+  }, [])
+
+  const startBackfillPoll = () => {
+    if (pollRef.current) return
+    pollRef.current = setInterval(async () => {
+      try {
+        const s = await api.backfillAttachmentsStatus()
+        setBackfill(s)
+        if (!s.running) {
+          stopBackfillPoll()
+          load(1)  // refresh the listing so new attachments appear
+        }
+      } catch {}
+    }, 2000)
+  }
+
+  const stopBackfillPoll = () => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
+  }
+
+  const runBackfill = async () => {
+    try {
+      await api.backfillAttachments()
+      startBackfillPoll()
+    } catch (err) {
+      setBackfill({ running: false, error: String(err.message || err) })
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -305,6 +523,11 @@ export default function AttachmentIndex() {
             className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors ${tab === 'browse' ? 'bg-white dark:bg-gray-700 text-gray-800 dark:text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
             Browse
           </button>
+          <button onClick={() => setTab('disk')}
+            title="Attachments found by scanning the filesystem directly (catches files not linked to a specific email)"
+            className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors flex items-center gap-1 ${tab === 'disk' ? 'bg-white dark:bg-gray-700 text-gray-800 dark:text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+            <Archive className="w-3 h-3" /> On Disk
+          </button>
           <button onClick={() => setTab('search')}
             className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors flex items-center gap-1 ${tab === 'search' ? 'bg-white dark:bg-gray-700 text-gray-800 dark:text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
             <Eye className="w-3 h-3" /> Content Search
@@ -312,7 +535,9 @@ export default function AttachmentIndex() {
         </div>
       </div>
 
-      {tab === 'search' ? (
+      {tab === 'disk' ? (
+        <DiskAttachments />
+      ) : tab === 'search' ? (
         <>
           <OnboardingBanner id="attachment-content-search">
             Content Search lets you search <strong>inside</strong> PDF and DOCX files —
@@ -329,6 +554,9 @@ export default function AttachmentIndex() {
             not user content. The original message bytes (including the signature) are still preserved in the
             <code className="font-mono text-[11px] px-1 py-0.5 bg-white/60 dark:bg-gray-700/60 rounded mx-0.5">.eml</code> export.
           </OnboardingBanner>
+
+          {/* Apple Mail external-attachment backfill */}
+          <BackfillBanner status={backfill} onRun={runBackfill} />
           <div className="flex items-center gap-3 flex-wrap">
             <div className="relative flex-1 min-w-[180px]">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />

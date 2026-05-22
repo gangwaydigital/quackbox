@@ -35,11 +35,13 @@ _INSERT_SQL = """
     INSERT INTO emails (
         message_id, subject, sender_name, sender_email, recipients,
         date_sent, date_timestamp, body_text, body_html, headers,
-        mbox_source, thread_id, has_attachments, attachment_names, raw_message
+        mbox_source, thread_id, has_attachments, attachment_names, raw_message,
+        source_path
     ) VALUES (
         :message_id, :subject, :sender_name, :sender_email, :recipients,
         :date_sent, :date_timestamp, :body_text, :body_html, :headers,
-        :mbox_source, :thread_id, :has_attachments, :attachment_names, :raw_message
+        :mbox_source, :thread_id, :has_attachments, :attachment_names, :raw_message,
+        :source_path
     )
 """
 
@@ -403,3 +405,239 @@ def get_source_status(data_dir: Path) -> list[dict]:
             })
 
     return sorted(results, key=lambda r: r["source_name"])
+
+
+# ── External attachment backfill (Apple Mail .emlx sibling Attachments/) ──
+
+_MID_PATTERN = re.compile(
+    rb"^Message-ID:\s*<?([^>\r\n]+)>?", re.MULTILINE | re.IGNORECASE
+)
+
+
+def _extract_message_id_fast(emlx_path: Path) -> str | None:
+    """Read just the headers of an .emlx and pull out the Message-ID.
+
+    Avoids full MIME parsing — we only need the ID to index back into the
+    emails table. Reads up to 16 KB; headers are virtually always shorter."""
+    try:
+        with open(emlx_path, "rb") as f:
+            head = f.read(16 * 1024)
+    except OSError:
+        return None
+    # Skip past the leading "<byte_count>\n" line
+    nl = head.find(b"\n")
+    if nl != -1:
+        head = head[nl + 1:]
+    m = _MID_PATTERN.search(head)
+    if not m:
+        return None
+    return m.group(1).decode("ascii", errors="replace").strip()
+
+
+def backfill_external_attachments(progress_callback=None) -> dict:
+    """
+    For every .emlx file under every registered folder, find the matching
+    email row by Message-ID and update it with:
+      - source_path  (path to the .emlx file)
+      - attachment_names  (existing inline + filenames from sibling
+        Attachments/ dir)
+      - has_attachments
+
+    Idempotent: already-correct rows just re-set the same values. Safe to
+    re-run after new folder registrations or after Apple Mail adds new
+    attachments to existing messages.
+
+    progress_callback(done, total) fires every 200 emlx files so callers
+    can render a progress bar.
+    """
+    from app.services.emlx_parser import external_attachment_filenames
+    from app.services.folders import all_data_paths
+
+    start = time.time()
+    scanned = 0
+    matched = 0
+    updated = 0
+    not_in_db = 0
+    no_message_id = 0
+
+    log.info("📎 Backfilling external attachments…")
+
+    # Collect all .emlx file paths first so we can show progress
+    all_emlx: list[Path] = []
+    for root in all_data_paths():
+        for p in root.rglob("*.emlx"):
+            if ".partial." not in p.name:
+                all_emlx.append(p)
+    total = len(all_emlx)
+    log.info("📎 Found %d .emlx files to scan", total)
+
+    if progress_callback:
+        try:
+            progress_callback(0, total)
+        except Exception:
+            log.exception("progress_callback raised; ignoring")
+
+    BATCH = 200
+    with get_db() as conn:
+        for i, emlx_path in enumerate(all_emlx):
+            scanned += 1
+            mid = _extract_message_id_fast(emlx_path)
+            if not mid:
+                no_message_id += 1
+                continue
+
+            row = conn.execute(
+                "SELECT id, attachment_names FROM emails WHERE message_id = ?",
+                (mid,),
+            ).fetchone()
+            if not row:
+                not_in_db += 1
+                continue
+            matched += 1
+
+            # Existing inline names from the original parse
+            try:
+                import json
+                existing = json.loads(row["attachment_names"] or "[]")
+            except Exception:
+                existing = []
+            external = external_attachment_filenames(emlx_path)
+            merged = list(dict.fromkeys(existing + external))
+
+            conn.execute(
+                """
+                UPDATE emails
+                SET source_path = ?,
+                    attachment_names = ?,
+                    has_attachments = ?
+                WHERE id = ?
+                """,
+                (str(emlx_path), json.dumps(merged), 1 if merged else 0, row["id"]),
+            )
+            updated += 1
+
+            if (i + 1) % BATCH == 0:
+                conn.commit()
+                if progress_callback:
+                    try:
+                        progress_callback(i + 1, total)
+                    except Exception:
+                        log.exception("progress_callback raised; ignoring")
+
+        if progress_callback:
+            try:
+                progress_callback(total, total)
+            except Exception:
+                log.exception("progress_callback raised; ignoring")
+
+    duration = round(time.time() - start, 2)
+    log.info(
+        "✅ Backfill done in %.1fs: scanned=%d, matched=%d, updated=%d, "
+        "not_in_db=%d, no_message_id=%d",
+        duration, scanned, matched, updated, not_in_db, no_message_id,
+    )
+    return {
+        "scanned": scanned,
+        "matched": matched,
+        "updated": updated,
+        "not_in_db": not_in_db,
+        "no_message_id": no_message_id,
+        "duration_seconds": duration,
+    }
+
+
+def scan_disk_attachments(progress_callback=None) -> dict:
+    """
+    Walk every registered folder and index every file under */Attachments/*
+    into the disk_attachments table. Many Apple Mail archives have attachment
+    binaries that don't cleanly link back to a specific .emlx — this is the
+    "show them anyway" path.
+
+    The 'mailbox_hint' column is the path segment immediately above
+    .../Attachments/ — usually something like 'INBOX', 'Sent Messages', etc.
+
+    Idempotent on file_path (UNIQUE constraint). Files that have moved or
+    been deleted since the last scan stay indexed; a follow-up cleanup pass
+    could prune them but isn't worth the complexity right now.
+    """
+    from app.services.folders import all_data_paths
+    from app.utils.email_utils import _is_noise_attachment
+
+    start = time.time()
+    scanned = 0
+    inserted = 0
+    skipped_noise = 0
+    skipped_existing = 0
+
+    log.info("📁 Scanning registered folders for disk attachments…")
+
+    with get_db() as conn:
+        for root in all_data_paths():
+            for p in root.rglob("*"):
+                if "/Attachments/" not in str(p):
+                    continue
+                if not p.is_file() or p.name.startswith("."):
+                    continue
+                scanned += 1
+                if _is_noise_attachment(p.name):
+                    skipped_noise += 1
+                    continue
+
+                # Mailbox hint = the directory ABOVE the .../Data/N/M/ hash
+                # bucket (i.e. the .mbox bundle name).
+                hint = None
+                for parent in p.parents:
+                    if parent.name.endswith(".mbox"):
+                        hint = parent.name[:-5]
+                        break
+
+                try:
+                    st = p.stat()
+                    size, mtime = st.st_size, st.st_mtime
+                except OSError:
+                    size, mtime = 0, 0
+
+                ext = p.suffix.lower().lstrip(".") or ""
+                try:
+                    conn.execute(
+                        """
+                        INSERT OR IGNORE INTO disk_attachments
+                            (file_path, filename, extension, size, mailbox_hint, file_mtime)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                        """,
+                        (str(p), p.name, ext, size, hint, mtime),
+                    )
+                    if conn.total_changes:
+                        inserted += 1
+                    else:
+                        skipped_existing += 1
+                except Exception:
+                    log.exception("Could not insert disk attachment %s", p)
+
+                if scanned % 1000 == 0:
+                    conn.commit()
+                    if progress_callback:
+                        try:
+                            progress_callback(scanned)
+                        except Exception:
+                            pass
+
+        if progress_callback:
+            try:
+                progress_callback(scanned)
+            except Exception:
+                pass
+
+    duration = round(time.time() - start, 2)
+    log.info(
+        "✅ Disk-attachment scan done in %.1fs: scanned=%d, inserted=%d, "
+        "skipped_noise=%d, already_indexed=%d",
+        duration, scanned, inserted, skipped_noise, skipped_existing,
+    )
+    return {
+        "scanned": scanned,
+        "inserted": inserted,
+        "skipped_noise": skipped_noise,
+        "already_indexed": skipped_existing,
+        "duration_seconds": duration,
+    }

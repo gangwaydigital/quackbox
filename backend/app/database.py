@@ -41,7 +41,8 @@ def init_db(db_path: Path = DB_PATH):
             sender_name TEXT, sender_email TEXT, recipients TEXT, date_sent TEXT,
             date_timestamp REAL, body_text TEXT, body_html TEXT, headers TEXT,
             mbox_source TEXT, thread_id TEXT, has_attachments BOOLEAN DEFAULT 0,
-            attachment_names TEXT, raw_message BLOB, created_at TEXT DEFAULT (datetime('now')))""")
+            attachment_names TEXT, raw_message BLOB, source_path TEXT,
+            created_at TEXT DEFAULT (datetime('now')))""")
 
         # Migration: add raw_message to pre-existing databases that don't have it.
         # Safe to run after CREATE TABLE — only ALTERs if the column is missing.
@@ -49,6 +50,9 @@ def init_db(db_path: Path = DB_PATH):
         if "raw_message" not in existing_columns:
             log.info("Adding raw_message column to emails table...")
             conn.execute("ALTER TABLE emails ADD COLUMN raw_message BLOB")
+        if "source_path" not in existing_columns:
+            log.info("Adding source_path column to emails table...")
+            conn.execute("ALTER TABLE emails ADD COLUMN source_path TEXT")
 
         conn.execute("CREATE INDEX IF NOT EXISTS idx_sender_email ON emails(sender_email)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_date_timestamp ON emails(date_timestamp DESC)")
@@ -208,6 +212,27 @@ def init_db(db_path: Path = DB_PATH):
             )
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_emlx_source ON ingest_emlx_files(source_name)")
+
+        # -- Disk-scanned attachments (Apple Mail Attachments/ trees) --
+        # Apple Mail stores attachment binaries in per-message Attachments/
+        # subdirectories independently of the .emlx files; many archives have
+        # tens of thousands that don't map cleanly to any single email row.
+        # This table indexes every file found on disk so the UI can surface
+        # them directly, even when the linkage to a specific email is lost.
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS disk_attachments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                file_path TEXT NOT NULL UNIQUE,
+                filename TEXT NOT NULL,
+                extension TEXT,
+                size INTEGER,
+                mailbox_hint TEXT,
+                file_mtime REAL,
+                indexed_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_disk_attach_filename ON disk_attachments(filename)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_disk_attach_mtime ON disk_attachments(file_mtime DESC)")
 
         # -- User-registered ingest folders (in addition to legacy DATA_DIR) --
         # host_path is what the user sees ("/Users/duck/Library/Mail/V10");
