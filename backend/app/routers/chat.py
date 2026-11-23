@@ -2,6 +2,7 @@
 from typing import Optional
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
+from app.config import CHAT_MODEL
 from app.services.chat import chat, get_available_models, get_stats_summary
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
@@ -26,7 +27,7 @@ async def chat_endpoint(request: ChatRequest):
 @router.get("/models")
 async def list_models():
     models = get_available_models()
-    return {"models": models, "default": "llama3.1:8b", "available": len(models) > 0}
+    return {"models": models, "default": CHAT_MODEL, "available": len(models) > 0}
 
 @router.get("/summary")
 async def archive_summary():

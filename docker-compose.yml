@@ -8,6 +8,13 @@
 #
 # AI Configuration (all optional — defaults to local Ollama):
 #
+#   AI_PROVIDER     — "ollama" (default) or "omlx". Sets URL, API type and
+#                     default models for chat + embeddings in one switch.
+#   OMLX_API_KEY    — oMLX API key (needed when AI_PROVIDER=omlx)
+#   OMLX_BASE_URL / OLLAMA_BASE_URL — override the provider's endpoint
+#
+#   The variables below override individual preset values.
+#
 #   Chat LLM (for Q&A and summarization):
 #     CHAT_API_URL    — API base URL (default: http://host.docker.internal:11434)
 #     CHAT_API_KEY    — API key (blank for Ollama)
@@ -42,17 +49,21 @@ services:
     environment:
       - DATA_DIR=/app/data
       - DB_DIR=/app/db
-      # --- Chat LLM (defaults to local Ollama) ---
-      - CHAT_API_URL=http://host.docker.internal:11434
-      - CHAT_API_KEY=
-      - CHAT_MODEL=llama3.1:8b
-      - CHAT_API_TYPE=ollama
-      # --- Embedding LLM (defaults to local Ollama) ---
-      - EMBED_API_URL=http://host.docker.internal:11434
-      - EMBED_API_KEY=
-      - EMBED_MODEL=nomic-embed-text
-      - EMBED_API_TYPE=ollama
-      - EMBEDDING_DIMENSIONS=768
+      # --- AI provider: "ollama" (default) or "omlx" ---
+      - AI_PROVIDER=${AI_PROVIDER:-ollama}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - OMLX_BASE_URL=${OMLX_BASE_URL:-http://host.docker.internal:6868}
+      - OMLX_API_KEY=${OMLX_API_KEY:-}
+      # --- Per-setting overrides (blank = use the provider preset) ---
+      - CHAT_API_URL=${CHAT_API_URL:-}
+      - CHAT_API_KEY=${CHAT_API_KEY:-}
+      - CHAT_MODEL=${CHAT_MODEL:-}
+      - CHAT_API_TYPE=${CHAT_API_TYPE:-}
+      - EMBED_API_URL=${EMBED_API_URL:-}
+      - EMBED_API_KEY=${EMBED_API_KEY:-}
+      - EMBED_MODEL=${EMBED_MODEL:-}
+      - EMBED_API_TYPE=${EMBED_API_TYPE:-}
+      - EMBEDDING_DIMENSIONS=${EMBEDDING_DIMENSIONS:-}
       # --- Background watcher (auto re-import) ---
       - WATCH_INTERVAL_MINUTES=${WATCH_INTERVAL_MINUTES:-0}
       - WATCH_ON_STARTUP=${WATCH_ON_STARTUP:-false}

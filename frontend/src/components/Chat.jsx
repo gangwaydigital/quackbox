@@ -19,8 +19,8 @@ export default function Chat() {
     api.getChatModels().then(data => {
       setModels(data.models || [])
       if (!selectedModel && data.models?.length > 0) {
-        // Prefer llama3.1:8b, fall back to first available
-        const preferred = data.models.find(m => m.includes('llama3'))
+        // Prefer the backend's configured CHAT_MODEL, fall back to first available
+        const preferred = data.models.find(m => m === data.default)
         setSelectedModel(preferred || data.models[0])
       }
     }).catch(() => {})

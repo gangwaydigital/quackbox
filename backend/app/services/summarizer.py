@@ -1,7 +1,7 @@
 """
 Thread summarization service.
 
-Uses Ollama to generate structured summaries of email threads:
+Uses the configured chat LLM (Ollama or OpenAI-compatible, e.g. oMLX) to generate structured summaries of email threads:
 - Summary narrative
 - Key decisions
 - Action items
@@ -11,10 +11,34 @@ Uses Ollama to generate structured summaries of email threads:
 import json
 import requests
 from typing import Optional
-from app.config import CHAT_API_URL
+from app.config import CHAT_API_URL, CHAT_API_KEY, CHAT_API_TYPE, CHAT_MODEL
 from app.database import get_db
 
-SUMMARIZE_MODEL = "llama3.1:8b"
+SUMMARIZE_MODEL = CHAT_MODEL
+
+
+def _complete(model: str, messages: list, temperature: float, max_tokens: int, timeout: int):
+    """POST a chat completion to the configured API. Returns (status_code, content, raw_text)."""
+    if CHAT_API_TYPE == "openai":
+        headers = {"Content-Type": "application/json"}
+        if CHAT_API_KEY:
+            headers["Authorization"] = f"Bearer {CHAT_API_KEY}"
+        resp = requests.post(
+            f"{CHAT_API_URL}/v1/chat/completions",
+            headers=headers,
+            json={"model": model, "messages": messages, "temperature": temperature, "max_tokens": max_tokens},
+            timeout=timeout,
+        )
+        content = resp.json()["choices"][0]["message"]["content"] if resp.status_code == 200 else ""
+    else:
+        resp = requests.post(
+            f"{CHAT_API_URL}/api/chat",
+            json={"model": model, "messages": messages, "stream": False,
+                  "options": {"temperature": temperature, "num_predict": max_tokens}},
+            timeout=timeout,
+        )
+        content = resp.json().get("message", {}).get("content", "") if resp.status_code == 200 else ""
+    return resp.status_code, content, resp.text
 
 
 def summarize_thread(thread_id: int, model: str = None) -> dict:
@@ -67,24 +91,17 @@ Respond with this exact JSON structure:
 Important: Return ONLY valid JSON. No markdown, no explanations, just the JSON object."""
 
     try:
-        resp = requests.post(
-            f"{CHAT_API_URL}/api/chat",
-            json={
-                "model": model,
-                "messages": [
-                    {"role": "system", "content": "You are a precise email analyst. You always respond with valid JSON only."},
-                    {"role": "user", "content": prompt}
-                ],
-                "stream": False,
-                "options": {"temperature": 0.2, "num_predict": 2048},
-            },
-            timeout=120,
+        status, content, raw = _complete(
+            model,
+            [
+                {"role": "system", "content": "You are a precise email analyst. You always respond with valid JSON only."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.2, max_tokens=2048, timeout=120,
         )
 
-        if resp.status_code != 200:
-            return {"error": f"Ollama error (HTTP {resp.status_code})", "raw": resp.text[:200]}
-
-        content = resp.json().get("message", {}).get("content", "")
+        if status != 200:
+            return {"error": f"Chat API error (HTTP {status})", "raw": raw[:200]}
 
         # Try to parse JSON from response
         parsed = _extract_json(content)
@@ -109,9 +126,9 @@ Important: Return ONLY valid JSON. No markdown, no explanations, just the JSON o
             }
 
     except requests.exceptions.ConnectionError:
-        return {"error": "Cannot connect to Ollama. Make sure it's running: ollama serve"}
+        return {"error": f"Cannot connect to chat API at {CHAT_API_URL}. Make sure it's running."}
     except requests.exceptions.Timeout:
-        return {"error": "Ollama timed out. The model may be loading — try again."}
+        return {"error": "Chat API timed out. The model may be loading — try again."}
 
 
 def summarize_email(email_id: int, model: str = None) -> dict:
@@ -146,24 +163,18 @@ Respond with JSON:
 }}"""
 
     try:
-        resp = requests.post(
-            f"{CHAT_API_URL}/api/chat",
-            json={
-                "model": model,
-                "messages": [
-                    {"role": "system", "content": "You respond with valid JSON only."},
-                    {"role": "user", "content": prompt}
-                ],
-                "stream": False,
-                "options": {"temperature": 0.2, "num_predict": 1024},
-            },
-            timeout=60,
+        status, content, _ = _complete(
+            model,
+            [
+                {"role": "system", "content": "You respond with valid JSON only."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.2, max_tokens=1024, timeout=60,
         )
 
-        if resp.status_code != 200:
-            return {"error": f"Ollama error: {resp.status_code}"}
+        if status != 200:
+            return {"error": f"Chat API error: {status}"}
 
-        content = resp.json().get("message", {}).get("content", "")
         parsed = _extract_json(content)
         if parsed:
             parsed["email_id"] = email_id
@@ -172,9 +183,9 @@ Respond with JSON:
         return {"email_id": email_id, "summary": content.strip(), "model": model}
 
     except requests.exceptions.ConnectionError:
-        return {"error": "Cannot connect to Ollama"}
+        return {"error": "Cannot connect to chat API"}
     except requests.exceptions.Timeout:
-        return {"error": "Ollama timed out"}
+        return {"error": "Chat API timed out"}
 
 
 def _format_thread_for_llm(emails) -> str:

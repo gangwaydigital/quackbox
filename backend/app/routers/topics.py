@@ -8,6 +8,7 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
+from app.config import EMBED_MODEL
 from app.models import ClusterRequest
 from app.services.clustering import (
     check_ollama_available,
@@ -195,7 +196,7 @@ async def get_topic_detail(topic_id: int, page: int = Query(1, ge=1), page_size:
 @router.post("/cluster")
 async def run_clustering(request: ClusterRequest = ClusterRequest()):
     if not check_ollama_available():
-        raise HTTPException(503, "Ollama is not running or model not available. Run: ollama pull nomic-embed-text")
+        raise HTTPException(503, f"Embedding API not reachable or model '{EMBED_MODEL}' not available.")
     if _task_status["running"]:
         return {"message": "Clustering already in progress", **_task_status}
     loop = asyncio.get_event_loop()
@@ -206,7 +207,7 @@ async def run_clustering(request: ClusterRequest = ClusterRequest()):
 @router.get("/status/ollama")
 async def check_ollama():
     available = check_ollama_available()
-    return {"available": available, "model": "nomic-embed-text", "message": "Ready" if available else "Ollama not running or model not pulled"}
+    return {"available": available, "model": EMBED_MODEL, "message": "Ready" if available else "Embedding API not reachable or model not available"}
 
 
 @router.post("/cancel")
