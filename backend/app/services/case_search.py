@@ -2,7 +2,7 @@
 import json
 from datetime import datetime, timezone
 
-from app.services.semantic_search import semantic_search
+from app.services.semantic_search import _generate_query_embedding, semantic_search
 
 
 def to_fts_phrase(term: str) -> str:
@@ -19,9 +19,8 @@ def person_terms(person: dict) -> list[str]:
     return [person["name"], *person["emails"]]
 
 
-def _like(term: str) -> str:
-    t = term.strip().rstrip("*")
-    return "%" + t.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+def _like(text: str) -> str:
+    return "%" + text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
 
 
 def _epoch(date_iso, end_of_day=False):
@@ -37,12 +36,15 @@ def _keyword(conn, term):
 
 
 def _recipients(conn, term):
-    like = _like(term)
+    t = term.strip().rstrip("*")
+    like = _like(t)
+    # recipients is stored via json.dumps, which escapes non-ASCII and quotes; match that form too.
+    like_json = _like(json.dumps(t)[1:-1])
     # Unindexed LIKE scans emails (~52k rows: tens of ms); acceptable for a per-term run.
     return [r[0] for r in conn.execute(
         """SELECT id FROM emails WHERE recipients LIKE ? ESCAPE '\\'
-           OR sender_email LIKE ? ESCAPE '\\' OR sender_name LIKE ? ESCAPE '\\'""",
-        (like, like, like))]
+           OR recipients LIKE ? ESCAPE '\\' OR sender_email LIKE ? ESCAPE '\\' OR sender_name LIKE ? ESCAPE '\\'""",
+        (like, like_json, like, like))]
 
 
 def _attachments(conn, term):
@@ -51,6 +53,15 @@ def _attachments(conn, term):
         """SELECT DISTINCT ac.email_id FROM attachment_fts
            JOIN attachment_content ac ON ac.id = attachment_fts.rowid
            WHERE attachment_fts MATCH ? AND ac.email_id IS NOT NULL""", (phrase,))]
+
+
+def _semantic(conn, term, limit):
+    # semantic_search swallows embedding failures and returns []; surface them instead.
+    if _generate_query_embedding(term) is None:
+        raise RuntimeError("query embedding failed")
+    if conn.execute("SELECT 1 FROM embeddings LIMIT 1").fetchone() is None:
+        raise RuntimeError("no embeddings indexed")
+    return [r["id"] for r in semantic_search(term, limit)]
 
 
 def run_term(conn, case_id: int, term_id: int, semantic_limit: int = 50) -> dict:
@@ -71,7 +82,7 @@ def run_term(conn, case_id: int, term_id: int, semantic_limit: int = 50) -> dict
         "keyword": lambda: _keyword(conn, text),
         "recipients": lambda: _recipients(conn, text),
         "attachments": lambda: _attachments(conn, text),
-        "semantic": lambda: [r["id"] for r in semantic_search(text, semantic_limit)],
+        "semantic": lambda: _semantic(conn, text, semantic_limit),
     }
     counts, errors, hits = {}, [], {}
     for name, fn in channels.items():
@@ -82,6 +93,7 @@ def run_term(conn, case_id: int, term_id: int, semantic_limit: int = 50) -> dict
             counts[name] = 0
             errors.append(f"{name}: {e}")
 
+    counts["semantic_capped"] = counts["semantic"] == semantic_limit
     lo, hi = _epoch(case["date_from"]), _epoch(case["date_to"], True)
     existing = {r[0] for r in conn.execute("SELECT email_id FROM case_candidates WHERE case_id = ?", (case_id,))}
     new = 0

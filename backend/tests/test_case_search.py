@@ -12,9 +12,16 @@ T0 = 1704067200.0  # 2024-01-01 UTC
 @pytest.fixture(autouse=True)
 def no_semantic(monkeypatch):
     monkeypatch.setattr(srch, "semantic_search", lambda q, limit: [])
+    monkeypatch.setattr(srch, "_generate_query_embedding", lambda t: object())
 
 
 def _email(conn, n, body="body", recipients="[]", ts=T0, subject="s", sender="n@example.com"):
+    eid = _email_row(conn, n, body, recipients, ts, subject, sender)
+    conn.execute("INSERT INTO embeddings (email_id, embedding) VALUES (?, x'00')", (eid,))
+    return eid
+
+
+def _email_row(conn, n, body, recipients, ts, subject, sender):
     return conn.execute(
         "INSERT INTO emails (message_id, subject, sender_name, sender_email, recipients, date_timestamp, body_text)"
         " VALUES (?, ?, 'N', ?, ?, ?, ?)",
@@ -127,7 +134,7 @@ def test_run_logs_channel_counts(fresh_db):
     r = srch.run_term(fresh_db, cid, tid)
     row = fresh_db.execute("SELECT * FROM case_runs WHERE id=?", (r["run_id"],)).fetchone()
     assert json.loads(row["channel_counts"]) == r["channel_counts"] == {
-        "keyword": 1, "recipients": 0, "attachments": 0, "semantic": 0}
+        "keyword": 1, "recipients": 0, "attachments": 0, "semantic": 0, "semantic_capped": False}
     assert row["status"] == "ok" and row["finished_at"]
 
 
@@ -139,3 +146,38 @@ def test_channel_error_logged_others_run(fresh_db, monkeypatch):
     cid, tid = _case(fresh_db, "heron")
     r = srch.run_term(fresh_db, cid, tid)
     assert r["status"] == "error" and "semantic" in r["error"] and r["channel_counts"]["keyword"] == 1
+
+
+def test_semantic_embedding_failure_is_error(fresh_db, monkeypatch):
+    e = _email(fresh_db, 1, body="egret")
+    monkeypatch.setattr(srch, "_generate_query_embedding", lambda t: None)
+    cid, tid = _case(fresh_db, "egret")
+    r = srch.run_term(fresh_db, cid, tid)
+    assert r["status"] == "error" and "embedding" in r["error"]
+    assert e in _cands(fresh_db, cid)
+
+
+def test_semantic_no_embeddings_indexed_is_error(fresh_db):
+    fresh_db.execute(
+        "INSERT INTO emails (message_id, subject, sender_email, body_text) VALUES ('x','s','a@b.test','kite')")
+    cid, tid = _case(fresh_db, "kite")
+    r = srch.run_term(fresh_db, cid, tid)
+    assert r["status"] == "error" and "no embeddings" in r["error"]
+    assert r["channel_counts"]["keyword"] == 1
+
+
+def test_recipient_non_ascii_and_quote(fresh_db):
+    a = _email(fresh_db, 1, recipients=json.dumps(["Jos\u00e9 N\u00fa\u00f1ez <jn@corp.test>"]))
+    b = _email(fresh_db, 2, recipients=json.dumps(['Bob "The Boss" <bb@corp.test>']))
+    for term, eid in (("Jos\u00e9", a), ("N\u00fa\u00f1ez", a), ('"The Boss"', b)):
+        cid, tid = _case(fresh_db, term)
+        srch.run_term(fresh_db, cid, tid)
+        assert eid in _cands(fresh_db, cid), term
+
+
+def test_semantic_capped_flag(fresh_db, monkeypatch):
+    ids = [_email(fresh_db, i, body="zzz") for i in range(3)]
+    monkeypatch.setattr(srch, "semantic_search", lambda q, limit: [{"id": i} for i in ids[:limit]])
+    cid, tid = _case(fresh_db, "nomatchterm")
+    assert srch.run_term(fresh_db, cid, tid, semantic_limit=2)["channel_counts"]["semantic_capped"] is True
+    assert srch.run_term(fresh_db, cid, tid, semantic_limit=10)["channel_counts"]["semantic_capped"] is False
