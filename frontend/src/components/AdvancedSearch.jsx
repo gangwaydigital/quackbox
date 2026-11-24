@@ -4,6 +4,7 @@ import { Search, Calendar, User, Paperclip, X, Bookmark } from 'lucide-react'
 import { api } from '../api/client'
 import SavedSearches from './SavedSearches'
 import EmailPane from './EmailPane'
+import HelpLink from './HelpLink'
 
 export default function AdvancedSearch() {
   const [query, setQuery]       = useState('')
@@ -102,7 +103,7 @@ export default function AdvancedSearch() {
       <div className="flex-1 min-w-0 space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-            <Search className="w-5 h-5 text-blue-600" /> Advanced Search
+            <Search className="w-5 h-5 text-blue-600" /> Advanced Search <HelpLink section="search" />
           </h2>
           {/* Save current search shortcut on mobile */}
           <div className="sm:hidden">

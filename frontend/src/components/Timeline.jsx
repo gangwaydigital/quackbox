@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Clock, Rocket, Mail, Zap, UserPlus, MessageSquare, TrendingUp, TrendingDown, Award, Filter } from 'lucide-react'
 import { api } from '../api/client'
+import HelpLink from './HelpLink'
 
 const ICONS = {
   rocket: Rocket, mail: Mail, zap: Zap, 'user-plus': UserPlus,
@@ -48,6 +49,7 @@ export default function TimelineView() {
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
           <Clock className="w-5 h-5 text-blue-600" /> Email Timeline
           {milestones && <span className="text-sm font-normal text-gray-400">({filtered.length} milestones)</span>}
+          <HelpLink section="timeline" />
         </h2>
         <div className="flex flex-wrap gap-1">
           <button onClick={() => setFilter('all')}

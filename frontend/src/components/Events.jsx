@@ -5,6 +5,7 @@ import {
   Clock, ChevronLeft, ChevronRight, AlertCircle
 } from 'lucide-react'
 import { api } from '../api/client'
+import HelpLink from './HelpLink'
 
 function formatRange(start, end) {
   if (!start) return ''
@@ -119,6 +120,7 @@ export default function Events() {
               ({stats.total_events.toLocaleString()} total · {stats.upcoming_events.toLocaleString()} upcoming)
             </span>
           )}
+          <HelpLink section="events" />
         </h2>
         <div className="flex items-center gap-2 flex-wrap">
           <div className="relative">

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import { MessageSquare, Users, Clock, ArrowLeft, RefreshCw, ChevronDown, ChevronRight, Paperclip, Sparkles, CheckCircle, HelpCircle, AlertCircle } from 'lucide-react'
 import { api } from '../api/client'
+import HelpLink from './HelpLink'
 
 function formatDate(dateStr) {
   if (!dateStr) return ''
@@ -110,6 +111,7 @@ export function ThreadList() {
           <MessageSquare className="w-5 h-5 text-blue-600" />
           Threads
           {pagination.total > 0 && <span className="text-sm font-normal text-gray-400">({pagination.total.toLocaleString()})</span>}
+          <HelpLink section="threads" />
         </h2>
         <div className="flex items-center gap-3">
           <select

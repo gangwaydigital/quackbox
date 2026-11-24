@@ -5,6 +5,7 @@ import { BarChart3, Users, Calendar, MessageSquare, Clock, TrendingUp, TrendingD
 import { api } from '../api/client'
 import { useChartTheme } from '../hooks/useChartTheme'
 import { OnboardingBanner } from './OnboardingTips'
+import HelpLink from './HelpLink'
 
 const COLORS = ['#3b82f6','#8b5cf6','#ec4899','#f59e0b','#10b981','#6366f1']
 const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
@@ -100,7 +101,7 @@ export default function Dashboard() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-            <BarChart3 className="w-5 h-5 text-blue-600 dark:text-blue-400" />Dashboard
+            <BarChart3 className="w-5 h-5 text-blue-600 dark:text-blue-400" />Dashboard <HelpLink section="dashboard" />
           </h2>
           {stats?.date_range?.earliest && (
             <p className="text-xs text-gray-400 mt-0.5">

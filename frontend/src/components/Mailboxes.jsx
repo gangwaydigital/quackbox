@@ -3,6 +3,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom'
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { Layers, ArrowLeft, Mail, Users, Clock, Paperclip, MessageSquare, Download } from 'lucide-react'
 import { api } from '../api/client'
+import HelpLink from './HelpLink'
 import { useChartTheme } from '../hooks/useChartTheme'
 import ImportStatus from './ImportStatus'
 
@@ -40,6 +41,7 @@ export function MailboxList() {
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
           <Layers className="w-5 h-5 text-blue-600 dark:text-blue-400" /> Mailboxes
           {sorted.length > 0 && <span className="text-sm font-normal text-gray-400">({sorted.length})</span>}
+          <HelpLink section="mailboxes" />
         </h2>
         <div className="flex items-center gap-3">
           <select value={sortBy} onChange={e => setSortBy(e.target.value)}

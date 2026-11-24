@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { Tags, Cpu, RefreshCw, ChevronDown, ChevronRight, Mail, AlertCircle, CheckCircle2, X, StopCircle, Layers, Info } from 'lucide-react'
 import { api } from '../api/client'
+import HelpLink from './HelpLink'
 
 const POLL_INTERVAL_MS = 2000
 
@@ -114,6 +115,7 @@ export default function TopicClusters() {
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
           <Tags className="w-5 h-5 text-blue-600" />
           Topic Clusters
+          <HelpLink section="topics" />
         </h2>
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-1.5 text-xs">

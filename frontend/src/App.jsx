@@ -3,7 +3,7 @@ import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   Mail, Tags, BarChart3, MessageCircle, MessageSquare, Users, Moon, Sun,
   Menu, X, Layers, Command, Calendar, CalendarClock, Paperclip, Clock, Filter,
-  ChevronLeft, Copy, Share2, Briefcase
+  ChevronLeft, Copy, Share2, Briefcase, HelpCircle
 } from 'lucide-react'
 import { api } from './api/client'
 import { useKeyboardShortcuts, ShortcutsHelp } from './hooks/useKeyboardShortcuts.jsx'
@@ -16,6 +16,7 @@ import EmailPane from './components/EmailPane'
 import SetupWizard from './components/SetupWizard'
 import ImportStatus from './components/ImportStatus'
 import SidebarSmartFolders from './components/SidebarSmartFolders'
+import HelpLink from './components/HelpLink'
 
 // Lazy-loaded — each route gets its own JS chunk that only downloads when
 // the user navigates to it. Heavy chart-bearing pages (Dashboard, Mailboxes,
@@ -26,6 +27,7 @@ const TopicClusters  = lazy(() => import('./components/TopicClusters'))
 const Chat           = lazy(() => import('./components/Chat'))
 const Cases          = lazy(() => import('./components/Cases'))
 const CaseView       = lazy(() => import('./components/CaseView'))
+const Help           = lazy(() => import('./components/Help'))
 const CalendarView   = lazy(() => import('./components/Calendar'))
 const AttachmentIndex = lazy(() => import('./components/Attachments'))
 const TimelineView   = lazy(() => import('./components/Timeline'))
@@ -179,6 +181,11 @@ export default function App() {
               <Command className="w-4 h-4 flex-shrink-0" />
               {sidebarOpen && <span>Shortcuts</span>}
             </button>
+            <Link to="/help" title="Help"
+              className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200 w-full ${sidebarOpen ? '' : 'justify-center'}`}>
+              <HelpCircle className="w-4 h-4 flex-shrink-0" />
+              {sidebarOpen && <span>Help</span>}
+            </Link>
             <ThemeToggleSidebar open={sidebarOpen} />
             <button onClick={() => setSidebarOpen(!sidebarOpen)}
               className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-200 w-full ${sidebarOpen ? '' : 'justify-center'}`}>
@@ -231,6 +238,9 @@ export default function App() {
                   )
                 })}
               </nav>
+              <Link to="/help" className="flex items-center gap-3 mx-2 px-3 py-2.5 rounded-xl text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800">
+                <HelpCircle className="w-4 h-4 flex-shrink-0" />Help
+              </Link>
               {stats && (
                 <div className="border-t border-gray-100 dark:border-gray-800 px-4 py-3 text-xs text-gray-400">
                   {stats.total_emails?.toLocaleString()} emails · v{stats.version}
@@ -265,6 +275,8 @@ export default function App() {
                 <Route path="/chat" element={<Chat />} />
                 <Route path="/cases" element={<Cases />} />
                 <Route path="/case/:id" element={<CaseView />} />
+                <Route path="/help" element={<Help />} />
+                <Route path="/help/:section" element={<Help />} />
               </Routes>
             </Suspense>
           </div>
@@ -416,10 +428,15 @@ function EmailsPage() {
 
   return (
     <div className="space-y-3">
-      <SearchBar
-        onSearch={(q) => { setSearchQuery(q); setFilters({}); setSelectedId(null) }}
-        onModeChange={setSearchMode}
-        searchMode={searchMode} />
+      <div className="flex items-center gap-2">
+        <div className="flex-1 min-w-0">
+          <SearchBar
+            onSearch={(q) => { setSearchQuery(q); setFilters({}); setSelectedId(null) }}
+            onModeChange={setSearchMode}
+            searchMode={searchMode} />
+        </div>
+        <HelpLink section="emails" />
+      </div>
 
       <div className="flex flex-col md:flex-row gap-4 md:gap-0" ref={containerRef}>
         {/* Filter sidebar */}

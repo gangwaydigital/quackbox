@@ -3,6 +3,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { Users, ArrowLeft, Search, Mail, Clock, MessageSquare, Download, Activity, GitMerge } from 'lucide-react'
 import { api } from '../api/client'
+import HelpLink from './HelpLink'
 import { useChartTheme } from '../hooks/useChartTheme'
 import SentimentDashboard from './Sentiment'
 import ContactMerge from './ContactMerge'
@@ -40,6 +41,7 @@ export function ContactList() {
     <div className="space-y-4">
       {/* Sub-navigation */}
       <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2">
         <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
           {subTabs.map(({ id, icon: Icon, label }) => (
             <button key={id} onClick={() => setSubTab(id)}
@@ -51,6 +53,8 @@ export function ContactList() {
               <Icon className="w-3.5 h-3.5" />{label}
             </button>
           ))}
+        </div>
+        <HelpLink section="contacts" />
         </div>
         {subTab === 'directory' && (
           <div className="flex items-center gap-3">

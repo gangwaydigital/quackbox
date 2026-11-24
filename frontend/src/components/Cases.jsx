@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Briefcase, Plus } from 'lucide-react'
 import { api } from '../api/client'
+import HelpLink from './HelpLink'
 
 const input = 'w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white'
 
@@ -40,6 +41,7 @@ export default function Cases() {
       <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
         <Briefcase className="w-5 h-5 text-blue-600" />
         Cases
+        <HelpLink section="cases" />
       </h2>
       {error && <div className="text-sm text-red-600 dark:text-red-400">{error}</div>}
 

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Share2, ZoomIn, ZoomOut, RotateCcw, Maximize2 } from 'lucide-react'
 import { api } from '../api/client'
+import HelpLink from './HelpLink'
 
 /**
  * Force-directed contact network graph rendered in plain SVG.
@@ -173,6 +174,7 @@ export default function ContactNetwork() {
               ({data.nodes.length} contacts · {data.edges?.length || 0} connections)
             </span>
           )}
+          <HelpLink section="network" />
         </h2>
         <div className="flex items-center gap-2 flex-wrap">
           <label className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5">

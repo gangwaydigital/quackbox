@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Briefcase, Loader2, Play, Pencil, Trash2, Download, AlertTriangle, Sparkles, UserPlus, ExternalLink } from 'lucide-react'
 import { api } from '../api/client'
+import HelpLink from './HelpLink'
 
 const input = 'px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white'
 const card = 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 space-y-3'
@@ -176,6 +177,7 @@ export default function CaseView() {
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
             <Link to="/cases" className="text-gray-400 hover:text-blue-600"><Briefcase className="w-5 h-5" /></Link>
             {c.name}
+            <HelpLink section="cases" />
           </h2>
           <a href={api.caseExportUrl(id)} className={btnPrimary}><Download className="w-3.5 h-3.5" />Export ZIP</a>
         </div>

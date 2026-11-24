@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Copy, Trash2, CheckCircle, ChevronDown, ChevronRight, AlertTriangle, RefreshCw, X } from 'lucide-react'
 import { api } from '../api/client'
+import HelpLink from './HelpLink'
 import { OnboardingBanner } from './OnboardingTips'
 
 const METHOD_LABELS = {
@@ -189,6 +190,7 @@ export default function Deduplication() {
               ({data.total} group{data.total !== 1 ? 's' : ''} found)
             </span>
           )}
+          <HelpLink section="duplicates" />
         </h2>
         <div className="flex items-center gap-2">
           {hasGroups && (

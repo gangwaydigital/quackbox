@@ -5,6 +5,7 @@ import {
   Download, Eye, X, Loader, BookOpen, RefreshCw, AlignLeft
 } from 'lucide-react'
 import { api } from '../api/client'
+import HelpLink from './HelpLink'
 import { OnboardingBanner } from './OnboardingTips'
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
@@ -517,6 +518,7 @@ export default function AttachmentIndex() {
           {data && tab === 'browse' && (
             <span className="text-sm font-normal text-gray-400">({(data.total || 0).toLocaleString()})</span>
           )}
+          <HelpLink section="files" />
         </h2>
         <div className="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-0.5 gap-0.5">
           <button onClick={() => setTab('browse')}

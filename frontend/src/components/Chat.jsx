@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { MessageCircle, Send, Bot, User, FileText, Cpu, ChevronDown } from 'lucide-react'
 import { api } from '../api/client'
+import HelpLink from './HelpLink'
 
 export default function Chat() {
   const [messages, setMessages] = useState([])
@@ -109,6 +110,7 @@ export default function Chat() {
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
           <MessageCircle className="w-5 h-5 text-blue-600" />
           Chat with your Archive
+          <HelpLink section="chat" />
         </h2>
 
         {/* Model selector */}

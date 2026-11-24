@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, Calendar as CalIcon, Mail, ArrowLeft } from 'lucide-react'
 import { api } from '../api/client'
+import HelpLink from './HelpLink'
 
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December']
 const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
@@ -61,7 +62,7 @@ export default function CalendarView() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-          <CalIcon className="w-5 h-5 text-blue-600" /> Calendar
+          <CalIcon className="w-5 h-5 text-blue-600" /> Calendar <HelpLink section="calendar" />
         </h2>
         <div className="flex items-center gap-3">
           <button onClick={prev} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"><ChevronLeft className="w-4 h-4" /></button>
