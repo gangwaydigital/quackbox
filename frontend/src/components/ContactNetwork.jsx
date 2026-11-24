@@ -163,6 +163,16 @@ export default function ContactNetwork() {
     }
   }, [onMouseMove])
 
+  // Native listener: React's onWheel is passive, so it can't stop the page from scrolling.
+  const hasGraph = !!sim
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const onWheel = (e) => { e.preventDefault(); zoom(e.deltaY < 0 ? 1.1 : 1 / 1.1) }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [hasGraph])
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">

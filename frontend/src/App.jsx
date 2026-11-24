@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, createContext, useContext, lazy, Suspense } from 'react'
-import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom'
+import { Routes, Route, Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Mail, Tags, BarChart3, MessageCircle, MessageSquare, Users, Moon, Sun,
   Menu, X, Layers, Command, Calendar, CalendarClock, Paperclip, Clock, Filter,
@@ -340,8 +340,12 @@ function ThemeToggleMobile() {
 }
 
 function EmailsPage() {
+  const [searchParams]                = useSearchParams()
   const [emails, setEmails]           = useState([])
-  const [filters, setFilters]         = useState({})
+  const [filters, setFilters]         = useState(() => {
+    const m = searchParams.get('mbox_source')   // set by Mailboxes > Browse emails
+    return m ? { mbox_source: m } : {}
+  })
   const [searchQuery, setSearchQuery] = useState('')
   const [searchMode, setSearchMode]   = useState('keyword')
   const [pagination, setPagination]   = useState({ page: 1, total: 0, total_pages: 1 })

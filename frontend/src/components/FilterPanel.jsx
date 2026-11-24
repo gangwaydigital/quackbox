@@ -7,7 +7,8 @@ export default function FilterPanel({ onFilter, currentFilters }) {
   const [sources, setSources] = useState([])
   const [expanded, setExpanded] = useState(false)
   const [filters, setFilters] = useState({
-    sender_email: '', date_from: '', date_to: '', mbox_source: '', has_attachments: ''
+    sender_email: '', date_from: '', date_to: '', mbox_source: '', has_attachments: '',
+    ...currentFilters,
   })
 
   useEffect(() => {
