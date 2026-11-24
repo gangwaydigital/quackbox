@@ -11,7 +11,7 @@ Uses the configured chat LLM (Ollama or OpenAI-compatible, e.g. oMLX) to generat
 import json
 import requests
 from typing import Optional
-from app.config import CHAT_API_URL, CHAT_API_KEY, CHAT_API_TYPE, CHAT_MODEL
+from app.config import CHAT_API_URL, CHAT_API_KEY, CHAT_API_TYPE, CHAT_MODEL, CHAT_EXTRA_BODY
 from app.database import get_db
 
 SUMMARIZE_MODEL = CHAT_MODEL
@@ -26,7 +26,8 @@ def _complete(model: str, messages: list, temperature: float, max_tokens: int, t
         resp = requests.post(
             f"{CHAT_API_URL}/v1/chat/completions",
             headers=headers,
-            json={"model": model, "messages": messages, "temperature": temperature, "max_tokens": max_tokens},
+            json={"model": model, "messages": messages, "temperature": temperature, "max_tokens": max_tokens,
+                  **CHAT_EXTRA_BODY},
             timeout=timeout,
         )
         # .get: thinking models can return reasoning only, with no content.

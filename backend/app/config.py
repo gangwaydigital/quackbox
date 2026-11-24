@@ -41,6 +41,13 @@ CHAT_API_URL = _env("CHAT_API_URL", _url)
 CHAT_API_KEY = _env("CHAT_API_KEY", _key)  # blank = no auth (Ollama)
 CHAT_MODEL = _env("CHAT_MODEL", _chat_model)
 CHAT_API_TYPE = _env("CHAT_API_TYPE", _type)  # "ollama" or "openai"
+# Thinking models (e.g. GLM-4.7) can burn the whole token budget reasoning and return
+# no answer, so oMLX requests turn thinking off unless CHAT_ENABLE_THINKING=true.
+# Only sent to oMLX: the real OpenAI API rejects unknown request fields.
+CHAT_ENABLE_THINKING = _env("CHAT_ENABLE_THINKING", "false").lower() in ("1", "true", "yes")
+CHAT_EXTRA_BODY = (
+    {"chat_template_kwargs": {"enable_thinking": CHAT_ENABLE_THINKING}} if AI_PROVIDER == "omlx" else {}
+)
 
 # -- Embedding LLM --
 EMBED_API_URL = _env("EMBED_API_URL", _url)

@@ -5,7 +5,7 @@ import pytest
 
 _VARS = [
     "AI_PROVIDER", "OMLX_BASE_URL", "OMLX_API_KEY", "OLLAMA_BASE_URL", "OLLAMA_EMBED_MODEL",
-    "CHAT_API_URL", "CHAT_API_KEY", "CHAT_MODEL", "CHAT_API_TYPE",
+    "CHAT_API_URL", "CHAT_API_KEY", "CHAT_MODEL", "CHAT_API_TYPE", "CHAT_ENABLE_THINKING",
     "EMBED_API_URL", "EMBED_API_KEY", "EMBED_MODEL", "EMBED_API_TYPE", "EMBEDDING_DIMENSIONS",
 ]
 
@@ -46,3 +46,15 @@ def test_bad_provider_rejected(monkeypatch, tmp_path):
     with pytest.raises(ValueError):
         _load(monkeypatch, tmp_path, AI_PROVIDER="lmstudio")
     _load(monkeypatch, tmp_path)  # leave app.config in a valid state for other tests
+
+
+def test_omlx_disables_thinking_by_default(monkeypatch, tmp_path):
+    c = _load(monkeypatch, tmp_path, AI_PROVIDER="omlx")
+    assert c.CHAT_EXTRA_BODY == {"chat_template_kwargs": {"enable_thinking": False}}
+    c = _load(monkeypatch, tmp_path, AI_PROVIDER="omlx", CHAT_ENABLE_THINKING="true")
+    assert c.CHAT_EXTRA_BODY == {"chat_template_kwargs": {"enable_thinking": True}}
+
+
+def test_non_omlx_sends_no_extra_fields(monkeypatch, tmp_path):
+    c = _load(monkeypatch, tmp_path, CHAT_API_TYPE="openai")
+    assert c.CHAT_EXTRA_BODY == {}

@@ -12,6 +12,8 @@
 #                     default models for chat + embeddings in one switch.
 #   OMLX_API_KEY    — oMLX API key (needed when AI_PROVIDER=omlx)
 #   OMLX_BASE_URL / OLLAMA_BASE_URL — override the provider's endpoint
+#   CHAT_ENABLE_THINKING — "true" lets oMLX thinking models reason before
+#                     answering (default off: they can burn the token budget)
 #
 #   The variables below override individual preset values.
 #
@@ -59,6 +61,7 @@ services:
       - CHAT_API_KEY=${CHAT_API_KEY:-}
       - CHAT_MODEL=${CHAT_MODEL:-}
       - CHAT_API_TYPE=${CHAT_API_TYPE:-}
+      - CHAT_ENABLE_THINKING=${CHAT_ENABLE_THINKING:-}
       - EMBED_API_URL=${EMBED_API_URL:-}
       - EMBED_API_KEY=${EMBED_API_KEY:-}
       - EMBED_MODEL=${EMBED_MODEL:-}

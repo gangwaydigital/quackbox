@@ -3,7 +3,7 @@ RAG Chat service — supports Ollama and OpenAI-compatible endpoints.
 """
 import json
 import requests
-from app.config import CHAT_API_URL, CHAT_API_KEY, CHAT_MODEL, CHAT_API_TYPE
+from app.config import CHAT_API_URL, CHAT_API_KEY, CHAT_MODEL, CHAT_API_TYPE, CHAT_EXTRA_BODY
 from app.database import get_db
 from app.services.semantic_search import has_embeddings, hybrid_search
 
@@ -138,7 +138,7 @@ Your job is to:
                 headers=headers,
                 # Thinking models (e.g. GLM-4.7) spend tokens on reasoning before answering.
                 json={"model": model, "messages": messages,
-                      "temperature": 0.3, "max_tokens": 4096},
+                      "temperature": 0.3, "max_tokens": 4096, **CHAT_EXTRA_BODY},
                 timeout=180)
             if resp.status_code != 200:
                 return {"answer": f"Error (HTTP {resp.status_code}): {resp.text[:200]}", "sources": [], "model": model, "error": True}
