@@ -44,7 +44,8 @@ def run_triage_sync(case_id: int, db_path: Path) -> None:
             TRIAGE_STATUS["error"] = "Case not found"
             return
         rows = conn.execute(
-            f"""SELECT e.* FROM case_candidates cc JOIN emails e ON e.id = cc.email_id
+            f"""SELECT e.id, e.subject, e.sender_name, e.sender_email, e.date_sent, e.body_text,
+                       e.recipients FROM case_candidates cc JOIN emails e ON e.id = cc.email_id
                 WHERE cc.case_id = ? AND cc.triage = 'untriaged'
                 ORDER BY cc.semantic_only ASC, {_TRIAGE_RANK},
                          e.date_timestamp IS NULL, e.date_timestamp DESC""",

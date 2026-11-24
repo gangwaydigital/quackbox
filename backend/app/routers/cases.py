@@ -218,7 +218,8 @@ def find_more_route(case_id: int):
     with get_db() as conn:
         case = _case(conn, case_id)
         evidence = [dict(r) for r in conn.execute(
-            """SELECT e.* FROM case_candidates cc JOIN emails e ON e.id = cc.email_id
+            """SELECT e.id, e.subject, e.sender_name, e.sender_email, e.date_sent, e.body_text,
+                      e.recipients FROM case_candidates cc JOIN emails e ON e.id = cc.email_id
                WHERE cc.case_id = ? AND cc.review = 'evidence'""", (case_id,))]
     return find_more(case["issue"], evidence, [t["text"] for t in case["terms"]], case["people"])
 

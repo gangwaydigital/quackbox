@@ -158,3 +158,16 @@ def test_runs_report_each_runs_own_term_version(client):
     client.post(f"/api/cases/{cid}/terms/{new_tid}/run")
     runs = client.get(f"/api/cases/{cid}/runs").json()  # newest first
     assert [(r["term_version"], r["term_retired"]) for r in runs] == [(2, 0), (1, 1)]
+
+
+def test_find_more_evidence_only_needed_columns(client, monkeypatch):
+    cid, _ = _candidate(client)
+    eid = client.get(f"/api/cases/{cid}/candidates").json()["items"][0]["email_id"]
+    client.put(f"/api/cases/{cid}/candidates/{eid}", json={"review": "evidence"})
+    seen = {}
+    monkeypatch.setattr(cases_router, "find_more",
+                        lambda i, ev, ex, p: seen.update(ev=ev) or {"terms": [], "error": None, "people": []})
+    client.post(f"/api/cases/{cid}/find-more")
+    assert set(seen["ev"][0]) == {"id", "subject", "sender_name", "sender_email", "date_sent",
+                                  "body_text", "recipients"}
+

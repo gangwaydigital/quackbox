@@ -121,6 +121,15 @@ def test_submit_failure_resets_running(monkeypatch):
     assert ct.TRIAGE_STATUS["running"] is False
 
 
+def test_triage_loads_only_needed_columns(seeded, monkeypatch):
+    db, cid, conn = seeded
+    keys = []
+    monkeypatch.setattr(ct, "triage_email", lambda issue, email: keys.append(set(email)) or _res())
+    ct.run_triage_sync(cid, db)
+    assert keys and all(k == {"id", "subject", "sender_name", "sender_email", "date_sent",
+                              "body_text", "recipients"} for k in keys)
+
+
 def test_write_failure_is_per_candidate(seeded, monkeypatch):
     db, cid, conn = seeded
     n = {"i": 0}
