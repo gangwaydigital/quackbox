@@ -292,6 +292,79 @@ def init_db(db_path: Path = DB_PATH):
             )
         """)
 
+        # -- Cases (research workspaces) --
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS cases (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                issue TEXT NOT NULL,
+                date_from TEXT,
+                date_to TEXT,
+                created_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS case_people (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                case_id INTEGER NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+                name TEXT NOT NULL,
+                emails TEXT NOT NULL DEFAULT '[]'
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS case_terms (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                case_id INTEGER NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+                text TEXT NOT NULL,
+                version INTEGER NOT NULL DEFAULT 1,
+                replaces_id INTEGER,
+                source TEXT NOT NULL DEFAULT 'owner',
+                retired INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS case_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                case_id INTEGER NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+                term_id INTEGER,
+                started_at TEXT,
+                finished_at TEXT,
+                status TEXT NOT NULL,
+                channel_counts TEXT,
+                error TEXT
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS case_candidates (
+                case_id INTEGER NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+                email_id INTEGER NOT NULL REFERENCES emails(id),
+                review TEXT NOT NULL DEFAULT 'unreviewed',
+                triage TEXT NOT NULL DEFAULT 'untriaged',
+                triage_reason TEXT,
+                model_quote TEXT,
+                model_quote_ok INTEGER,
+                owner_quote TEXT,
+                note TEXT,
+                semantic_only INTEGER NOT NULL DEFAULT 1,
+                out_of_range INTEGER NOT NULL DEFAULT 0,
+                partial_text INTEGER NOT NULL DEFAULT 0,
+                triage_error TEXT,
+                PRIMARY KEY (case_id, email_id)
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS case_candidate_runs (
+                case_id INTEGER NOT NULL,
+                email_id INTEGER NOT NULL,
+                run_id INTEGER NOT NULL,
+                channel TEXT NOT NULL,
+                PRIMARY KEY (case_id, email_id, run_id, channel)
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_case_cand_review ON case_candidates(case_id, review)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_case_runs_case ON case_runs(case_id)")
+
         _migrate_emlx_raw_message(conn)
 
     log.info("Database initialized at %s", db_path)
