@@ -6,6 +6,8 @@ import zipfile
 from datetime import datetime, timezone
 from html import escape
 
+from app.config import MAX_BODY_LENGTH
+
 CSV_COLS = ["date", "from", "to_cc", "subject", "quote", "quote_source", "note",
             "found_by_terms", "mailbox", "email_id", "eml_file"]
 LOG_COLS = ["run_id", "term", "term_version", "term_source", "retired", "started_at", "status",
@@ -154,6 +156,9 @@ def build_case_zip(conn, case_id: int) -> bytes:
 
     n_cands = conn.execute("SELECT COUNT(*) FROM case_candidates WHERE case_id = ?",
                            (case_id,)).fetchone()[0]
+    n_untriaged = conn.execute(
+        "SELECT COUNT(*) FROM case_candidates WHERE case_id = ? AND triage = 'untriaged'",
+        (case_id,)).fetchone()[0]
     n_terms = conn.execute("SELECT COUNT(*) FROM case_terms WHERE case_id = ?", (case_id,)).fetchone()[0]
     unindexed = conn.execute("SELECT COUNT(*) FROM attachment_content").fetchone()[0] == 0
 
@@ -163,13 +168,16 @@ def build_case_zip(conn, case_id: int) -> bytes:
         "## Counts", "",
         f"- Search terms (all versions, including retired): {n_terms}",
         f"- Search runs: {len(runs)}", f"- Candidate emails found: {n_cands}",
-        f"- Emails marked as evidence by the owner: {len(items)}", "",
+        f"- Emails marked as evidence by the owner: {len(items)}",
+        f"- Candidates not yet triaged by AI: {n_untriaged}", "",
         "## Method", "",
-        "- Keyword search covers subject, sender name and address, and the full body. It returns "
-        "all matches for each term, with no cap.",
+        "- Keyword search covers subject, sender name and address, and the body as stored at "
+        f"ingest (the first {MAX_BODY_LENGTH:,} characters of each body). It returns all matches "
+        "for each term, with no cap.",
         "- Person search matches sender and To/Cc/Bcc addresses and display names.",
         "- Meaning-based (semantic) search is a separate, lower-confidence tier: the top 50 results "
-        "per term. Emails found only this way are marked \"semantic only\".",
+        "per term, dropping any result with a similarity score below 0.1. Emails found only this "
+        "way are marked \"semantic only\".",
         "- Attachment text is searched only where it has been indexed (see warning below, if any).",
         "- The date range and people are hints, never filters: nothing outside the range and no "
         "undated email was dropped.",
@@ -181,7 +189,7 @@ def build_case_zip(conn, case_id: int) -> bytes:
         "an AI model and checked to appear in the email body, ignoring case, whitespace, "
         "quote/dash style and reply markers (>). Failed model quotes are left blank.",
         "- In the CSV files, text starting with a character that spreadsheets run as a formula "
-        "(= + - @) was prefixed with an apostrophe. The .eml files are the exact stored originals.",
+        "(= + - @ tab CR) was prefixed with an apostrophe. The .eml files are the exact stored originals.",
         "",
         "## Files", "",
         "- `evidence.csv`: one row per evidence email. `to_cc` lists recipients as "

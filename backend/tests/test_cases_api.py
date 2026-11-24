@@ -171,3 +171,19 @@ def test_find_more_evidence_only_needed_columns(client, monkeypatch):
     assert set(seen["ev"][0]) == {"id", "subject", "sender_name", "sender_email", "date_sent",
                                   "body_text", "recipients"}
 
+
+def test_bad_case_dates_422_and_iso_stored(client):
+    assert client.post("/api/cases", json={"name": "C", "issue": "i", "date_from": "soon"}).status_code == 422
+    cid = client.post("/api/cases", json={"name": "C", "issue": "i", "date_from": "2024-01-05",
+                                          "date_to": "2024-02-01"}).json()["id"]
+    case = client.get(f"/api/cases/{cid}").json()
+    assert (case["date_from"], case["date_to"]) == ("2024-01-05", "2024-02-01")
+
+
+def test_empty_owner_quote_clears(client):
+    cid, _ = _candidate(client)
+    eid = client.get(f"/api/cases/{cid}/candidates").json()["items"][0]["email_id"]
+    url = f"/api/cases/{cid}/candidates/{eid}"
+    assert client.put(url, json={"owner_quote": "cancel the budget"}).status_code == 200
+    assert client.put(url, json={"owner_quote": ""}).status_code == 200
+    assert client.get(f"/api/cases/{cid}/candidates").json()["items"][0]["owner_quote"] is None

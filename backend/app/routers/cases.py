@@ -1,6 +1,6 @@
 """Cases API: research workspaces over the email archive."""
 import json
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal, Optional
 
 from fastapi import APIRouter, HTTPException, Query
@@ -19,8 +19,8 @@ router = APIRouter(prefix="/api/cases", tags=["cases"])
 class CaseIn(BaseModel):
     name: str
     issue: str
-    date_from: Optional[str] = None
-    date_to: Optional[str] = None
+    date_from: Optional[date] = None
+    date_to: Optional[date] = None
 
 
 class PersonIn(BaseModel):
@@ -75,7 +75,9 @@ async def list_cases():
 @router.post("")
 async def create_case(body: CaseIn):
     with get_db() as conn:
-        return {"id": case_store.create_case(conn, body.name, body.issue, body.date_from, body.date_to)}
+        return {"id": case_store.create_case(conn, body.name, body.issue,
+                                             body.date_from and body.date_from.isoformat(),
+                                             body.date_to and body.date_to.isoformat())}
 
 
 # Static paths before /{id} so "triage" is never parsed as a case id.
@@ -190,8 +192,8 @@ async def update_candidate(case_id: int, email_id: int, body: CandidateIn):
         note = body.note if "note" in body.model_fields_set else row["note"]
         try:
             # Quote first: it is the only check that can fail after review is valid.
-            if body.owner_quote is not None:
-                case_store.set_owner_quote(conn, case_id, email_id, body.owner_quote)
+            if body.owner_quote is not None:  # "" clears it, falling back to the model quote
+                case_store.set_owner_quote(conn, case_id, email_id, body.owner_quote or None)
             if body.review is not None:
                 case_store.set_review(conn, case_id, email_id, body.review, note)
             elif "note" in body.model_fields_set:

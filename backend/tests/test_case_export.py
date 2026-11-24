@@ -188,3 +188,14 @@ def test_running_run_listed_unfinished(fresh_db):
     fresh_db.execute("INSERT INTO case_runs (case_id, started_at, status) VALUES (?, 't', 'running')", (cid,))
     readme = _open(fresh_db, cid)[1]("README.md")
     assert "did not finish" in readme and "run 1" in readme
+
+
+def test_readme_limits_and_untriaged_count(fresh_db):
+    cid = _case(fresh_db)
+    _cand(fresh_db, cid, _email(fresh_db, 1))
+    _cand(fresh_db, cid, _email(fresh_db, 2), review="unreviewed")
+    readme = _open(fresh_db, cid)[1]("README.md")
+    assert "full body" not in readme and "100,000 characters" in readme
+    assert "0.1" in readme
+    assert "= + - @ tab CR" in readme
+    assert "Candidates not yet triaged by AI: 2" in readme
