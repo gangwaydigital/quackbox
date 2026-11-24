@@ -136,12 +136,15 @@ Your job is to:
                 headers["Authorization"] = f"Bearer {CHAT_API_KEY}"
             resp = requests.post(f"{CHAT_API_URL}/v1/chat/completions",
                 headers=headers,
+                # Thinking models (e.g. GLM-4.7) spend tokens on reasoning before answering.
                 json={"model": model, "messages": messages,
-                      "temperature": 0.3, "max_tokens": 1024},
-                timeout=120)
+                      "temperature": 0.3, "max_tokens": 4096},
+                timeout=180)
             if resp.status_code != 200:
                 return {"answer": f"Error (HTTP {resp.status_code}): {resp.text[:200]}", "sources": [], "model": model, "error": True}
-            answer = resp.json()["choices"][0]["message"]["content"]
+            answer = resp.json()["choices"][0]["message"].get("content")
+            if not answer:
+                return {"answer": "The model used its whole token budget thinking and returned no answer. Try a shorter question or a non-thinking model.", "sources": [], "model": model, "error": True}
         else:
             resp = requests.post(f"{CHAT_API_URL}/api/chat",
                 json={"model": model, "messages": messages, "stream": False,

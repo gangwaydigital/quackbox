@@ -29,7 +29,8 @@ def _complete(model: str, messages: list, temperature: float, max_tokens: int, t
             json={"model": model, "messages": messages, "temperature": temperature, "max_tokens": max_tokens},
             timeout=timeout,
         )
-        content = resp.json()["choices"][0]["message"]["content"] if resp.status_code == 200 else ""
+        # .get: thinking models can return reasoning only, with no content.
+        content = (resp.json()["choices"][0]["message"].get("content") or "") if resp.status_code == 200 else ""
     else:
         resp = requests.post(
             f"{CHAT_API_URL}/api/chat",
@@ -97,7 +98,7 @@ Important: Return ONLY valid JSON. No markdown, no explanations, just the JSON o
                 {"role": "system", "content": "You are a precise email analyst. You always respond with valid JSON only."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.2, max_tokens=2048, timeout=120,
+            temperature=0.2, max_tokens=4096, timeout=180,
         )
 
         if status != 200:
@@ -169,7 +170,7 @@ Respond with JSON:
                 {"role": "system", "content": "You respond with valid JSON only."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.2, max_tokens=1024, timeout=60,
+            temperature=0.2, max_tokens=4096, timeout=180,
         )
 
         if status != 200:

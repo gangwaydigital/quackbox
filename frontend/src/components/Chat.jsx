@@ -78,7 +78,7 @@ export default function Chat() {
     } catch (err) {
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: `Error: ${err.message}. Make sure Ollama is running with a chat model pulled.`,
+        content: `Error: ${err.message}. Make sure the chat API (Ollama or oMLX) is running with a chat model available.`,
         sources: [],
         error: true,
       }])
