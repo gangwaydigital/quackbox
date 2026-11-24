@@ -24,3 +24,11 @@ def test_null_body():
 
 def test_empty_quote_fails():
     assert not verify_quote("   ", "body")
+
+
+def test_nested_reply_markers():
+    assert verify_quote("a b", "> > a\n> > b")
+
+
+def test_marker_without_space():
+    assert verify_quote("agreed to pay", "agreed\n>to pay")

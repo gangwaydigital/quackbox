@@ -5,7 +5,7 @@ _SMART = str.maketrans({
     "“": '"', "”": '"', "‘": "'", "’": "'",
     "–": "-", "—": "-",
 })
-_REPLY_MARKER = re.compile(r"^\s*>+", re.MULTILINE)
+_REPLY_MARKER = re.compile(r"^[ \t]*(?:>[ \t]*)+", re.MULTILINE)
 _WHITESPACE = re.compile(r"\s+")
 
 
