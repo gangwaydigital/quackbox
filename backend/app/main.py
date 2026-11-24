@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import init_db, get_stats
 from app.logging_config import setup_logging
-from app.routers import emails, topics, ingest, chat, threads, analytics, contacts, export, attachments, bookmarks, settings, deduplication, saved_searches, calendar, folders
+from app.routers import emails, topics, ingest, chat, threads, analytics, contacts, export, attachments, bookmarks, settings, deduplication, saved_searches, calendar, folders, cases
 from app.services import watcher
 
 APP_VERSION = "4.6.0"
@@ -37,6 +37,7 @@ app.include_router(deduplication.router)
 app.include_router(saved_searches.router)
 app.include_router(calendar.router)
 app.include_router(folders.router)
+app.include_router(cases.router)
 
 @app.get("/")
 async def root():
