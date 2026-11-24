@@ -11,36 +11,11 @@ Uses the configured chat LLM (Ollama or OpenAI-compatible, e.g. oMLX) to generat
 import json
 import requests
 from typing import Optional
-from app.config import CHAT_API_URL, CHAT_API_KEY, CHAT_API_TYPE, CHAT_MODEL, CHAT_EXTRA_BODY
+from app.config import CHAT_API_URL, CHAT_MODEL
+from app.services.llm import complete
 from app.database import get_db
 
 SUMMARIZE_MODEL = CHAT_MODEL
-
-
-def _complete(model: str, messages: list, temperature: float, max_tokens: int, timeout: int):
-    """POST a chat completion to the configured API. Returns (status_code, content, raw_text)."""
-    if CHAT_API_TYPE == "openai":
-        headers = {"Content-Type": "application/json"}
-        if CHAT_API_KEY:
-            headers["Authorization"] = f"Bearer {CHAT_API_KEY}"
-        resp = requests.post(
-            f"{CHAT_API_URL}/v1/chat/completions",
-            headers=headers,
-            json={"model": model, "messages": messages, "temperature": temperature, "max_tokens": max_tokens,
-                  **CHAT_EXTRA_BODY},
-            timeout=timeout,
-        )
-        # .get: thinking models can return reasoning only, with no content.
-        content = (resp.json()["choices"][0]["message"].get("content") or "") if resp.status_code == 200 else ""
-    else:
-        resp = requests.post(
-            f"{CHAT_API_URL}/api/chat",
-            json={"model": model, "messages": messages, "stream": False,
-                  "options": {"temperature": temperature, "num_predict": max_tokens}},
-            timeout=timeout,
-        )
-        content = resp.json().get("message", {}).get("content", "") if resp.status_code == 200 else ""
-    return resp.status_code, content, resp.text
 
 
 def summarize_thread(thread_id: int, model: str = None) -> dict:
@@ -93,7 +68,7 @@ Respond with this exact JSON structure:
 Important: Return ONLY valid JSON. No markdown, no explanations, just the JSON object."""
 
     try:
-        status, content, raw = _complete(
+        status, content, raw = complete(
             model,
             [
                 {"role": "system", "content": "You are a precise email analyst. You always respond with valid JSON only."},
@@ -165,7 +140,7 @@ Respond with JSON:
 }}"""
 
     try:
-        status, content, _ = _complete(
+        status, content, _ = complete(
             model,
             [
                 {"role": "system", "content": "You respond with valid JSON only."},

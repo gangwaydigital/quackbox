@@ -22,6 +22,7 @@
 #     CHAT_API_KEY    — API key (blank for Ollama)
 #     CHAT_MODEL      — Model name (default: llama3.1:8b)
 #     CHAT_API_TYPE   — "ollama" or "openai" (default: ollama)
+#     CASE_PROPOSE_MODEL — Model for case term proposals (default: qwen3.5-122b on oMLX, else CHAT_MODEL)
 #
 #   Embedding LLM (for semantic search and topic clustering):
 #     EMBED_API_URL   — API base URL (default: http://host.docker.internal:11434)
@@ -62,6 +63,7 @@ services:
       - CHAT_MODEL=${CHAT_MODEL:-}
       - CHAT_API_TYPE=${CHAT_API_TYPE:-}
       - CHAT_ENABLE_THINKING=${CHAT_ENABLE_THINKING:-}
+      - CASE_PROPOSE_MODEL=${CASE_PROPOSE_MODEL:-}
       - EMBED_API_URL=${EMBED_API_URL:-}
       - EMBED_API_KEY=${EMBED_API_KEY:-}
       - EMBED_MODEL=${EMBED_MODEL:-}

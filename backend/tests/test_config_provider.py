@@ -5,7 +5,7 @@ import pytest
 
 _VARS = [
     "AI_PROVIDER", "OMLX_BASE_URL", "OMLX_API_KEY", "OLLAMA_BASE_URL", "OLLAMA_EMBED_MODEL",
-    "CHAT_API_URL", "CHAT_API_KEY", "CHAT_MODEL", "CHAT_API_TYPE", "CHAT_ENABLE_THINKING",
+    "CHAT_API_URL", "CHAT_API_KEY", "CHAT_MODEL", "CHAT_API_TYPE", "CHAT_ENABLE_THINKING", "CASE_PROPOSE_MODEL",
     "EMBED_API_URL", "EMBED_API_KEY", "EMBED_MODEL", "EMBED_API_TYPE", "EMBEDDING_DIMENSIONS",
 ]
 
@@ -40,6 +40,17 @@ def test_explicit_override_and_blank_passthrough(monkeypatch, tmp_path):
     c = _load(monkeypatch, tmp_path, AI_PROVIDER="omlx", CHAT_MODEL="qwen3-coder", EMBED_MODEL="")
     assert c.CHAT_MODEL == "qwen3-coder"
     assert c.EMBED_MODEL == "bge-base-en-v1.5"
+
+
+def test_case_propose_model(monkeypatch, tmp_path):
+    c = _load(monkeypatch, tmp_path, AI_PROVIDER="omlx")
+    assert c.CASE_PROPOSE_MODEL == "qwen3.5-122b"
+    c = _load(monkeypatch, tmp_path)
+    assert c.CASE_PROPOSE_MODEL == c.CHAT_MODEL
+    c = _load(monkeypatch, tmp_path, AI_PROVIDER="omlx", CASE_PROPOSE_MODEL="x")
+    assert c.CASE_PROPOSE_MODEL == "x"
+    c = _load(monkeypatch, tmp_path, AI_PROVIDER="omlx", CASE_PROPOSE_MODEL="")
+    assert c.CASE_PROPOSE_MODEL == "qwen3.5-122b"
 
 
 def test_bad_provider_rejected(monkeypatch, tmp_path):

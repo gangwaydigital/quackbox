@@ -40,6 +40,7 @@ else:
 CHAT_API_URL = _env("CHAT_API_URL", _url)
 CHAT_API_KEY = _env("CHAT_API_KEY", _key)  # blank = no auth (Ollama)
 CHAT_MODEL = _env("CHAT_MODEL", _chat_model)
+CASE_PROPOSE_MODEL = _env("CASE_PROPOSE_MODEL", "qwen3.5-122b" if AI_PROVIDER == "omlx" else CHAT_MODEL)
 CHAT_API_TYPE = _env("CHAT_API_TYPE", _type)  # "ollama" or "openai"
 # Thinking models (e.g. GLM-4.7) can burn the whole token budget reasoning and return
 # no answer, so oMLX requests turn thinking off unless CHAT_ENABLE_THINKING=true.
