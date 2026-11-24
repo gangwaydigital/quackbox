@@ -264,9 +264,9 @@ def delete_duplicates(group_ids: list[int] | None = None, delete_all: bool = Fal
         group_ids: specific group IDs to process, or None for all
         delete_all: if True and group_ids is None, process every group
 
-    Returns summary of deleted count.
+    Returns summary of deleted count, plus duplicates kept because a case references them.
     """
-    deleted = 0
+    deleted = kept = 0
     with get_db() as conn:
         if delete_all or group_ids is None:
             rows = conn.execute("SELECT id FROM duplicate_groups").fetchall()
@@ -276,13 +276,24 @@ def delete_duplicates(group_ids: list[int] | None = None, delete_all: bool = Fal
             dup_email_ids = conn.execute(
                 "SELECT email_id FROM duplicate_emails WHERE group_id = ?", (gid,)
             ).fetchall()
+            group_kept = 0
             for row in dup_email_ids:
+                # Case candidates reference emails; keep those rather than drop evidence.
+                if conn.execute("SELECT 1 FROM case_candidates WHERE email_id = ? LIMIT 1",
+                                (row["email_id"],)).fetchone():
+                    group_kept += 1
+                    continue
                 conn.execute("DELETE FROM emails WHERE id = ?", (row["email_id"],))
                 deleted += 1
-            conn.execute("DELETE FROM duplicate_groups WHERE id = ?", (gid,))
+            kept += group_kept
+            if group_kept:  # group stays listed with only the kept duplicates
+                conn.execute("UPDATE duplicate_groups SET duplicate_count = ? WHERE id = ?",
+                             (group_kept, gid))
+            else:
+                conn.execute("DELETE FROM duplicate_groups WHERE id = ?", (gid,))
 
-    log.info("🗑  Deleted %d duplicate emails", deleted)
-    return {"deleted": deleted}
+    log.info("🗑  Deleted %d duplicate emails (%d kept: used in cases)", deleted, kept)
+    return {"deleted": deleted, "kept_in_cases": kept}
 
 
 def dismiss_group(group_id: int) -> dict:

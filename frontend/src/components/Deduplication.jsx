@@ -150,8 +150,12 @@ export default function Deduplication() {
     }
   }
 
+  const reportKept = (r) => {
+    if (r?.kept_in_cases) alert(`${r.kept_in_cases} duplicate(s) kept because a case uses them.`)
+  }
+
   const handleDelete = async (groupIds) => {
-    await api.deleteDuplicates({ group_ids: groupIds })
+    reportKept(await api.deleteDuplicates({ group_ids: groupIds }))
     await load(page)
   }
 
@@ -159,7 +163,7 @@ export default function Deduplication() {
     if (!confirm(`Delete all duplicates across ${data?.total} groups? Canonical (oldest) copies will be kept.`)) return
     setDeleting(true)
     try {
-      await api.deleteDuplicates({ delete_all: true })
+      reportKept(await api.deleteDuplicates({ delete_all: true }))
       await load(1)
     } finally {
       setDeleting(false)
