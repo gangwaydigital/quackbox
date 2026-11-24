@@ -181,3 +181,37 @@ def test_semantic_capped_flag(fresh_db, monkeypatch):
     cid, tid = _case(fresh_db, "nomatchterm")
     assert srch.run_term(fresh_db, cid, tid, semantic_limit=2)["channel_counts"]["semantic_capped"] is True
     assert srch.run_term(fresh_db, cid, tid, semantic_limit=10)["channel_counts"]["semantic_capped"] is False
+
+
+def _rcpt(*people):
+    return json.dumps([{"name": n, "email": e, "type": t} for n, e, t in people])
+
+
+@pytest.mark.parametrize("term", ["mail", "type", "name", "to", "cc", "null"])
+def test_recipient_json_keys_do_not_match(fresh_db, term):
+    for n in range(3):
+        _email(fresh_db, n, recipients=_rcpt(("Bob", "bob@corp.test", "to"), (None, "x@corp.test", "cc")),
+               sender="s@corp.test")
+    cid, tid = _case(fresh_db, term)
+    r = srch.run_term(fresh_db, cid, tid)
+    assert r["channel_counts"]["recipients"] == 0
+
+
+def test_recipient_dict_name_and_address_match(fresh_db):
+    a = _email(fresh_db, 1, recipients=_rcpt(("José Núñez", "jn@corp.test", "to")))
+    b = _email(fresh_db, 2, recipients=_rcpt(('Bob "The Boss"', "bb@corp.test", "cc")))
+    _email(fresh_db, 3, recipients=_rcpt(("Other", "o@corp.test", "to")))
+    for term, eid in (("jn@corp.test", a), ("núñez", a), ('"The Boss"', b), ("bb@corp", b)):
+        cid, tid = _case(fresh_db, term)
+        r = srch.run_term(fresh_db, cid, tid)
+        assert set(_cands(fresh_db, cid)) == {eid}, term
+        assert r["channel_counts"]["recipients"] == 1, term
+
+
+def test_recipient_non_json_value_tolerated(fresh_db):
+    a = _email(fresh_db, 1, recipients="Carol <carol@corp.test>")  # not JSON: raw text still searched
+    _email(fresh_db, 2, recipients=None)
+    cid, tid = _case(fresh_db, "carol")
+    r = srch.run_term(fresh_db, cid, tid)
+    assert r["status"] == "ok" and set(_cands(fresh_db, cid)) == {a}
+

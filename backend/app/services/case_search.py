@@ -36,15 +36,19 @@ def _keyword(conn, term):
 
 
 def _recipients(conn, term):
-    t = term.strip().rstrip("*")
-    like = _like(t)
-    # recipients is stored via json.dumps, which escapes non-ASCII and quotes; match that form too.
-    like_json = _like(json.dumps(t)[1:-1])
-    # Unindexed LIKE scans emails (~52k rows: tens of ms); acceptable for a per-term run.
+    like = _like(term.strip().rstrip("*"))
+    # Match recipient values (name/email), never the JSON keys. Plain-string elements and
+    # non-JSON rows fall back to matching their raw text. Unindexed scan: fine per term.
     return [r[0] for r in conn.execute(
-        """SELECT id FROM emails WHERE recipients LIKE ? ESCAPE '\\'
-           OR recipients LIKE ? ESCAPE '\\' OR sender_email LIKE ? ESCAPE '\\' OR sender_name LIKE ? ESCAPE '\\'""",
-        (like, like_json, like, like))]
+        """SELECT id FROM emails WHERE sender_email LIKE ? ESCAPE '\\' OR sender_name LIKE ? ESCAPE '\\'
+           OR (json_valid(recipients) AND EXISTS (
+                 SELECT 1 FROM json_each(CASE WHEN json_valid(recipients) THEN recipients ELSE '[]' END) j
+                 WHERE CASE WHEN j.type = 'object'
+                            THEN json_extract(j.value, '$.email') LIKE ? ESCAPE '\\'
+                                 OR json_extract(j.value, '$.name') LIKE ? ESCAPE '\\'
+                            ELSE j.type = 'text' AND j.value LIKE ? ESCAPE '\\' END))
+           OR (NOT json_valid(recipients) AND recipients LIKE ? ESCAPE '\\')""",
+        (like,) * 6)]
 
 
 def _attachments(conn, term):
