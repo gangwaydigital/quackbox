@@ -3,7 +3,7 @@ import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   Mail, Tags, BarChart3, MessageCircle, MessageSquare, Users, Moon, Sun,
   Menu, X, Layers, Command, Calendar, CalendarClock, Paperclip, Clock, Filter,
-  ChevronLeft, Copy, Share2
+  ChevronLeft, Copy, Share2, Briefcase
 } from 'lucide-react'
 import { api } from './api/client'
 import { useKeyboardShortcuts, ShortcutsHelp } from './hooks/useKeyboardShortcuts.jsx'
@@ -24,6 +24,8 @@ const Dashboard      = lazy(() => import('./components/Dashboard'))
 const EmailDetail    = lazy(() => import('./components/EmailDetail'))
 const TopicClusters  = lazy(() => import('./components/TopicClusters'))
 const Chat           = lazy(() => import('./components/Chat'))
+const Cases          = lazy(() => import('./components/Cases'))
+const CaseView       = lazy(() => import('./components/CaseView'))
 const CalendarView   = lazy(() => import('./components/Calendar'))
 const AttachmentIndex = lazy(() => import('./components/Attachments'))
 const TimelineView   = lazy(() => import('./components/Timeline'))
@@ -96,6 +98,7 @@ export default function App() {
     { path: '/duplicates', icon: Copy, label: 'Duplicates' },
     { path: '/topics', icon: Tags, label: 'Topics', badge: badges?.needs_topics },
     { path: '/chat', icon: MessageCircle, label: 'Chat' },
+    { path: '/cases', icon: Briefcase, label: 'Cases' },
   ]
 
   // Bottom nav items for mobile (show most-used 5)
@@ -260,6 +263,8 @@ export default function App() {
                 <Route path="/duplicates" element={<Deduplication />} />
                 <Route path="/topics" element={<TopicClusters />} />
                 <Route path="/chat" element={<Chat />} />
+                <Route path="/cases" element={<Cases />} />
+                <Route path="/case/:id" element={<CaseView />} />
               </Routes>
             </Suspense>
           </div>

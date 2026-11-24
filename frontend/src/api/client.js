@@ -177,4 +177,29 @@ export const api = {
   getCalendarEventStats: () => request('/calendar-events/stats'),
   triggerCalendarIndexing: () => request('/calendar-events/index', { method: 'POST' }),
   getCalendarIndexStatus: () => request('/calendar-events/status'),
+  // Cases
+  getCases: () => request('/cases'),
+  createCase: (body) => request('/cases', { method: 'POST', body: JSON.stringify(body) }),
+  getCase: (id) => request(`/cases/${id}`),
+  addCasePerson: (id, name, emails) => request(`/cases/${id}/people`, { method: 'POST', body: JSON.stringify({ name, emails }) }),
+  addCaseTerm: (id, text, source = 'owner') => request(`/cases/${id}/terms`, { method: 'POST', body: JSON.stringify({ text, source }) }),
+  editCaseTerm: (termId, text) => request(`/cases/terms/${termId}`, { method: 'PUT', body: JSON.stringify({ text }) }),
+  retireCaseTerm: (termId) => request(`/cases/terms/${termId}`, { method: 'DELETE' }),
+  proposeCaseTerms: (id) => request(`/cases/${id}/propose`, { method: 'POST' }),
+  runCaseTerm: (id, termId) => request(`/cases/${id}/terms/${termId}/run`, { method: 'POST' }),
+  runAllCaseTerms: (id) => request(`/cases/${id}/run-all`, { method: 'POST' }),
+  getCaseRuns: (id) => request(`/cases/${id}/runs`),
+  getCaseCandidates: (id, { review, triage, page = 1, pageSize = 50 } = {}) => {
+    const q = new URLSearchParams({ page, page_size: pageSize })
+    if (review) q.set('review', review)
+    if (triage) q.set('triage', triage)
+    return request(`/cases/${id}/candidates?${q}`)
+  },
+  // Send only the fields being changed; note: null clears the note.
+  updateCaseCandidate: (id, emailId, body) => request(`/cases/${id}/candidates/${emailId}`, { method: 'PUT', body: JSON.stringify(body) }),
+  startCaseTriage: (id) => request(`/cases/${id}/triage`, { method: 'POST' }),
+  getCaseTriageStatus: () => request('/cases/triage/status'),
+  cancelCaseTriage: () => request('/cases/triage/cancel', { method: 'POST' }),
+  caseFindMore: (id) => request(`/cases/${id}/find-more`, { method: 'POST' }),
+  caseExportUrl: (id) => `${BASE}/cases/${id}/export`,
 }
