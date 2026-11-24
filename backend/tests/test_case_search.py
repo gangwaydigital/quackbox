@@ -215,3 +215,44 @@ def test_recipient_non_json_value_tolerated(fresh_db):
     r = srch.run_term(fresh_db, cid, tid)
     assert r["status"] == "ok" and set(_cands(fresh_db, cid)) == {a}
 
+
+def _db_path(conn):
+    return conn.execute("PRAGMA database_list").fetchone()[2]
+
+
+def test_crash_after_run_row_commits_error(fresh_db, monkeypatch):
+    import sqlite3
+    _email(fresh_db, 1, body="gizmo")
+    cid, tid = _case(fresh_db, "gizmo")
+
+    def boom(*a, **k):
+        raise RuntimeError("disk gone")
+
+    monkeypatch.setattr(srch, "_epoch", boom)
+    with pytest.raises(RuntimeError):
+        srch.run_term(fresh_db, cid, tid)
+    fresh_db.rollback()  # what get_db does on the way out
+    other = sqlite3.connect(_db_path(fresh_db))
+    row = other.execute("SELECT status, error, finished_at FROM case_runs").fetchone()
+    other.close()
+    assert row[0] == "error" and "disk gone" in row[1] and row[2]
+
+
+def test_other_writers_not_blocked_while_channels_run(fresh_db, monkeypatch):
+    import sqlite3
+    _email(fresh_db, 1, body="gizmo")
+    cid, tid = _case(fresh_db, "gizmo")
+    seen = {}
+    orig = srch._keyword
+
+    def spy(conn, term):
+        o = sqlite3.connect(_db_path(fresh_db), timeout=0.2)
+        seen["running"] = o.execute("SELECT status FROM case_runs").fetchone()
+        o.execute("UPDATE cases SET name = 'renamed'")
+        o.commit()
+        o.close()
+        return orig(conn, term)
+
+    monkeypatch.setattr(srch, "_keyword", spy)
+    r = srch.run_term(fresh_db, cid, tid)
+    assert seen["running"] == ("running",) and r["status"] == "ok"

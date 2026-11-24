@@ -51,6 +51,7 @@ def run_triage_sync(case_id: int, db_path: Path) -> None:
             (case_id,),
         ).fetchall()
         TRIAGE_STATUS["total"] = len(rows)
+        failed = 0
         for row in rows:
             if TRIAGE_STATUS["cancelled"]:
                 break
@@ -61,14 +62,20 @@ def run_triage_sync(case_id: int, db_path: Path) -> None:
                 r = {"triage": "untriaged", "reason": "", "quote": None,
                      "quote_ok": False, "partial": False,
                      "error": f"{type(e).__name__}: {e}"[:200]}
-            conn.execute(
-                """UPDATE case_candidates SET triage = ?, triage_reason = ?, model_quote = ?,
-                          model_quote_ok = ?, partial_text = ?, triage_error = ?
-                   WHERE case_id = ? AND email_id = ?""",
-                (r["triage"], r["reason"], r["quote"], int(r["quote_ok"]),
-                 int(r["partial"]), r["error"], case_id, email["id"]),
-            )
-            conn.commit()
+            try:
+                conn.execute(
+                    """UPDATE case_candidates SET triage = ?, triage_reason = ?, model_quote = ?,
+                              model_quote_ok = ?, partial_text = ?, triage_error = ?
+                       WHERE case_id = ? AND email_id = ?""",
+                    (r["triage"], r["reason"], r["quote"], int(r["quote_ok"]),
+                     int(r["partial"]), r["error"], case_id, email["id"]),
+                )
+                conn.commit()
+            except Exception as e:  # e.g. database locked: this candidate stays untriaged, the job goes on
+                conn.rollback()
+                failed += 1
+                TRIAGE_STATUS["error"] = (f"{failed} candidate(s) could not be saved; last: "
+                                          f"{type(e).__name__}: {e}")[:200]
             TRIAGE_STATUS["done"] += 1
     except Exception as e:
         TRIAGE_STATUS["error"] = f"{type(e).__name__}: {e}"[:200]

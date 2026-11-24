@@ -119,3 +119,17 @@ def test_submit_failure_resets_running(monkeypatch):
     with pytest.raises(RuntimeError):
         ct.start_triage(1)
     assert ct.TRIAGE_STATUS["running"] is False
+
+
+def test_write_failure_is_per_candidate(seeded, monkeypatch):
+    db, cid, conn = seeded
+    n = {"i": 0}
+
+    def fake(issue, email):
+        n["i"] += 1
+        return {**_res(), "reason": object()} if n["i"] == 1 else _res()  # unbindable value
+
+    monkeypatch.setattr(ct, "triage_email", fake)
+    ct.run_triage_sync(cid, db)
+    assert sorted(_states(conn)) == ["relevant"] * 4 + ["untriaged"]
+    assert ct.TRIAGE_STATUS["done"] == 5 and "1 candidate" in ct.TRIAGE_STATUS["error"]

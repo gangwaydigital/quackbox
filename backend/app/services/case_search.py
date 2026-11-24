@@ -81,54 +81,64 @@ def run_term(conn, case_id: int, term_id: int, semantic_limit: int = 50) -> dict
     run_id = conn.execute(
         "INSERT INTO case_runs (case_id, term_id, started_at, status) VALUES (?, ?, ?, 'running')",
         (case_id, term_id, started)).lastrowid
-
-    channels = {
-        "keyword": lambda: _keyword(conn, text),
-        "recipients": lambda: _recipients(conn, text),
-        "attachments": lambda: _attachments(conn, text),
-        "semantic": lambda: _semantic(conn, text, semantic_limit),
-    }
-    counts, errors, hits = {}, [], {}
-    for name, fn in channels.items():
-        try:
-            hits[name] = list(dict.fromkeys(fn()))
-            counts[name] = len(hits[name])
-        except Exception as e:  # one channel failing must not hide the others
-            counts[name] = 0
-            errors.append(f"{name}: {e}")
-
-    counts["semantic_capped"] = counts["semantic"] == semantic_limit
-    lo, hi = _epoch(case["date_from"]), _epoch(case["date_to"], True)
-    existing = {r[0] for r in conn.execute("SELECT email_id FROM case_candidates WHERE case_id = ?", (case_id,))}
-    new = 0
-    for name, ids in hits.items():
-        sem = 1 if name == "semantic" else 0
-        for eid in ids:
-            ts = conn.execute("SELECT date_timestamp FROM emails WHERE id = ?", (eid,)).fetchone()
-            if ts is None:
-                continue
-            ts = ts[0]
-            oor = int(ts is not None and ((lo is not None and ts < lo) or (hi is not None and ts >= hi)))
-            conn.execute(
-                """INSERT INTO case_candidates (case_id, email_id, semantic_only, out_of_range)
-                   VALUES (?, ?, ?, ?)
-                   ON CONFLICT(case_id, email_id) DO UPDATE SET
-                     semantic_only = CASE WHEN excluded.semantic_only = 0 THEN 0
-                                          ELSE case_candidates.semantic_only END,
-                     out_of_range = excluded.out_of_range""",
-                (case_id, eid, sem, oor))
-            conn.execute(
-                "INSERT OR IGNORE INTO case_candidate_runs (case_id, email_id, run_id, channel) VALUES (?, ?, ?, ?)",
-                (case_id, eid, run_id, name))
-            if eid not in existing:
-                existing.add(eid)
-                new += 1
-
-    status = "error" if errors else "ok"
-    error = "; ".join(errors) or None
-    conn.execute(
-        "UPDATE case_runs SET finished_at = ?, status = ?, channel_counts = ?, error = ? WHERE id = ?",
-        (datetime.now(timezone.utc).isoformat(), status, json.dumps(counts), error, run_id))
+    # Commit now: the row shows as 'running', and no write lock is held during slow channel searches.
     conn.commit()
+    try:
+        channels = {
+            "keyword": lambda: _keyword(conn, text),
+            "recipients": lambda: _recipients(conn, text),
+            "attachments": lambda: _attachments(conn, text),
+            "semantic": lambda: _semantic(conn, text, semantic_limit),
+        }
+        counts, errors, hits = {}, [], {}
+        for name, fn in channels.items():
+            try:
+                hits[name] = list(dict.fromkeys(fn()))
+                counts[name] = len(hits[name])
+            except Exception as e:  # one channel failing must not hide the others
+                counts[name] = 0
+                errors.append(f"{name}: {e}")
+
+        counts["semantic_capped"] = counts["semantic"] == semantic_limit
+        lo, hi = _epoch(case["date_from"]), _epoch(case["date_to"], True)
+        existing = {r[0] for r in conn.execute("SELECT email_id FROM case_candidates WHERE case_id = ?", (case_id,))}
+        new = 0
+        # Upserts and the final run update are one short write transaction.
+        for name, ids in hits.items():
+            sem = 1 if name == "semantic" else 0
+            for eid in ids:
+                ts = conn.execute("SELECT date_timestamp FROM emails WHERE id = ?", (eid,)).fetchone()
+                if ts is None:
+                    continue
+                ts = ts[0]
+                oor = int(ts is not None and ((lo is not None and ts < lo) or (hi is not None and ts >= hi)))
+                conn.execute(
+                    """INSERT INTO case_candidates (case_id, email_id, semantic_only, out_of_range)
+                       VALUES (?, ?, ?, ?)
+                       ON CONFLICT(case_id, email_id) DO UPDATE SET
+                         semantic_only = CASE WHEN excluded.semantic_only = 0 THEN 0
+                                              ELSE case_candidates.semantic_only END,
+                         out_of_range = excluded.out_of_range""",
+                    (case_id, eid, sem, oor))
+                conn.execute(
+                    "INSERT OR IGNORE INTO case_candidate_runs (case_id, email_id, run_id, channel) VALUES (?, ?, ?, ?)",
+                    (case_id, eid, run_id, name))
+                if eid not in existing:
+                    existing.add(eid)
+                    new += 1
+
+        status = "error" if errors else "ok"
+        error = "; ".join(errors) or None
+        conn.execute(
+            "UPDATE case_runs SET finished_at = ?, status = ?, channel_counts = ?, error = ? WHERE id = ?",
+            (datetime.now(timezone.utc).isoformat(), status, json.dumps(counts), error, run_id))
+        conn.commit()
+    except Exception as e:  # a crash outside a channel is logged, never left as 'running'
+        conn.rollback()
+        conn.execute(
+            "UPDATE case_runs SET finished_at = ?, status = 'error', error = ? WHERE id = ?",
+            (datetime.now(timezone.utc).isoformat(), f"{type(e).__name__}: {e}"[:500], run_id))
+        conn.commit()
+        raise
     return {"run_id": run_id, "status": status, "channel_counts": counts,
             "new_candidates": new, "error": error}
