@@ -22,7 +22,7 @@ def _email(conn, n, ts=1700000000, date="2023-11-14", subject="s", raw=RAW):
 
 
 def _cand(conn, cid, eid, review="evidence", **kw):
-    cols = {"review": review, **kw}
+    cols = {"review": review, "semantic_only": 0, **kw}
     conn.execute(
         f"INSERT INTO case_candidates (case_id, email_id, {', '.join(cols)})"
         f" VALUES (?, ?, {', '.join('?' * len(cols))})", (cid, eid, *cols.values()))
@@ -154,3 +154,37 @@ def test_readme_warns_attachments_unindexed(fresh_db):
     readme = _open(fresh_db, cid)[1]("README.md")
     assert "Case A" in readme and "an issue" in readme
     assert "attachment" in readme.lower() and "not indexed" in readme.lower()
+
+
+def test_readme_method_notes(fresh_db):
+    cid = _case(fresh_db)
+    _cand(fresh_db, cid, _email(fresh_db, 1))
+    readme = _open(fresh_db, cid)[1]("README.md")
+    assert "50" in readme and "6,000" in readme and "never filters" in readme
+
+
+def test_csv_formula_prefixed(fresh_db):
+    cid = _case(fresh_db)
+    t = cs.add_term(fresh_db, cid, "=cmd")
+    fresh_db.execute("INSERT INTO case_runs (case_id, term_id, started_at, status)"
+                     " VALUES (?, ?, 't', 'done')", (cid, t))
+    _cand(fresh_db, cid, _email(fresh_db, 1, subject="=HYPERLINK(1)"), owner_quote="@x", note="-1")
+    z, rd = _open(fresh_db, cid)
+    r = _rows(rd("evidence.csv"))[0]
+    assert (r["subject"], r["quote"], r["note"]) == ("'=HYPERLINK(1)", "'@x", "'-1")
+    assert _rows(rd("search_log.csv"))[0]["term"] == "'=cmd"
+
+
+def test_semantic_only_marked(fresh_db):
+    cid = _case(fresh_db)
+    _cand(fresh_db, cid, _email(fresh_db, 1), semantic_only=1)
+    z, rd = _open(fresh_db, cid)
+    assert _rows(rd("evidence.csv"))[0]["found_by_terms"].endswith("(semantic only)")
+    assert "semantic only" in rd("timeline.html")
+
+
+def test_running_run_listed_unfinished(fresh_db):
+    cid = _case(fresh_db)
+    fresh_db.execute("INSERT INTO case_runs (case_id, started_at, status) VALUES (?, 't', 'running')", (cid,))
+    readme = _open(fresh_db, cid)[1]("README.md")
+    assert "did not finish" in readme and "run 1" in readme

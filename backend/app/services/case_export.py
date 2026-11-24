@@ -12,11 +12,16 @@ LOG_COLS = ["run_id", "term", "term_version", "term_source", "retired", "started
             "keyword", "recipients", "attachments", "semantic", "error"]
 
 
+def _safe(v):
+    # Spreadsheets run text starting with these characters as a formula.
+    return "'" + v if isinstance(v, str) and v[:1] in ("=", "+", "-", "@", "\t", "\r") else v
+
+
 def _csv(cols, rows) -> str:
     buf = io.StringIO()
     w = csv.DictWriter(buf, cols)
     w.writeheader()
-    w.writerows(rows)
+    w.writerows({k: _safe(v) for k, v in r.items()} for r in rows)
     return buf.getvalue()
 
 
@@ -54,7 +59,8 @@ def _counts(raw) -> dict:
 def _timeline(case, items) -> str:
     def entry(it):
         link = f' <a href="{escape(it["eml_file"])}">original</a>' if it["eml_file"] else ""
-        parts = [f'<h3>{escape(it["subject"] or "(no subject)")}</h3>',
+        badge = ' <span class="b">semantic only</span>' if it["semantic_only"] else ""
+        parts = [f'<h3>{escape(it["subject"] or "(no subject)")}{badge}</h3>',
                  f'<p class="meta">{escape(it["date"] or "undated")} &middot; '
                  f'{escape(it["from"])} &rarr; {escape(it["to_cc"])}{link}</p>']
         if it["quote"]:
@@ -74,6 +80,7 @@ def _timeline(case, items) -> str:
         "body{font-family:sans-serif;max-width:50em;margin:2em auto;padding:0 1em}"
         ".e{border-top:1px solid #999;padding:.4em 0;break-inside:avoid}"
         ".meta{color:#444;font-size:.9em}blockquote{margin:.5em 1em;font-style:italic}"
+        ".b{font-size:.7em;border:1px solid #999;padding:0 .3em}"
         "@media print{a{color:inherit}}</style></head><body>"
         f'<h1>{escape(case["name"])}</h1><p>{escape(case["issue"])}</p>{body}</body></html>')
 
@@ -90,7 +97,7 @@ def build_case_zip(conn, case_id: int) -> bytes:
 
     items, files, unavailable = [], {}, []
     rows = conn.execute(
-        "SELECT c.review, c.owner_quote, c.model_quote, c.model_quote_ok, c.note, e.id, e.subject,"
+        "SELECT c.review, c.semantic_only, c.owner_quote, c.model_quote, c.model_quote_ok, c.note, e.id, e.subject,"
         " e.sender_name, e.sender_email, e.date_sent, e.date_timestamp, e.recipients,"
         " e.raw_message, e.mbox_source FROM case_candidates c JOIN emails e ON e.id = c.email_id"
         " WHERE c.case_id = ? AND c.review = 'evidence' ORDER BY e.date_timestamp IS NULL,"
@@ -118,15 +125,16 @@ def build_case_zip(conn, case_id: int) -> bytes:
         items.append({
             "date": day, "from": sender, "to_cc": _to_cc(r["recipients"]),
             "subject": r["subject"] or "", "quote": quote, "quote_source": src,
-            "note": r["note"] or "", "found_by_terms": "; ".join(found.get(r["id"], [])),
-            "mailbox": r["mbox_source"] or "", "email_id": r["id"], "eml_file": eml,
+            "note": r["note"] or "", "found_by_terms": "; ".join(found.get(r["id"], []))
+            + (" (semantic only)" if r["semantic_only"] else ""),
+            "mailbox": r["mbox_source"] or "", "semantic_only": bool(r["semantic_only"]), "email_id": r["id"], "eml_file": eml,
             "ts": r["date_timestamp"]})
 
     runs = conn.execute(
         "SELECT r.*, t.text, t.version, t.source, t.retired FROM case_runs r"
         " LEFT JOIN case_terms t ON t.id = r.term_id WHERE r.case_id = ? ORDER BY r.id",
         (case_id,)).fetchall()
-    log_rows, errors, capped = [], [], []
+    log_rows, errors, capped, unfinished = [], [], [], []
     for r in runs:
         c = _counts(r["channel_counts"])
         log_rows.append({
@@ -139,6 +147,8 @@ def build_case_zip(conn, case_id: int) -> bytes:
         label = f"run {r['id']} (term: {r['text'] or 'n/a'})"
         if r["status"] == "error":
             errors.append(f"{label}: {r['error'] or 'unknown error'}")
+        if r["status"] == "running":
+            unfinished.append(label)
         if c.get("semantic_capped"):
             capped.append(label)
 
@@ -155,14 +165,24 @@ def build_case_zip(conn, case_id: int) -> bytes:
         f"- Search runs: {len(runs)}", f"- Candidate emails found: {n_cands}",
         f"- Emails marked as evidence by the owner: {len(items)}", "",
         "## Method", "",
-        "Searches ran over the archived mailbox by keyword (subject and body), by sender and "
-        "recipient address, over indexed attachment text, and by semantic similarity. Semantic "
-        "search returns a limited number of results per run. A cap is reported below when it was "
-        "hit. Emails that were only found semantically may be loosely related. Only emails the "
-        "owner marked as evidence are in this package. The other candidates are counted above but "
-        "not included. A quote marked `model` was suggested by an AI model and verified to appear "
-        "verbatim in the email. Failed model quotes are left blank. A quote marked `owner` was "
-        "entered by the owner.", "",
+        "- Keyword search covers subject, sender name and address, and the full body. It returns "
+        "all matches for each term, with no cap.",
+        "- Person search matches sender and To/Cc/Bcc addresses and display names.",
+        "- Meaning-based (semantic) search is a separate, lower-confidence tier: the top 50 results "
+        "per term. Emails found only this way are marked \"semantic only\".",
+        "- Attachment text is searched only where it has been indexed (see warning below, if any).",
+        "- The date range and people are hints, never filters: nothing outside the range and no "
+        "undated email was dropped.",
+        "- AI triage read at most the first 6,000 characters of each email and only ordered the "
+        "review queue. It decided nothing.",
+        "- Only emails the owner marked as evidence are in this package. Other candidates are "
+        "counted above but not included.",
+        "- A quote marked `owner` was entered by the owner. A quote marked `model` was suggested by "
+        "an AI model and checked to appear in the email body, ignoring case, whitespace, "
+        "quote/dash style and reply markers (>). Failed model quotes are left blank.",
+        "- In the CSV files, text starting with a character that spreadsheets run as a formula "
+        "(= + - @) was prefixed with an apostrophe. The .eml files are the exact stored originals.",
+        "",
         "## Files", "",
         "- `evidence.csv`: one row per evidence email. `to_cc` lists recipients as "
         "`Name <address> (Type)` separated by `;`. `eml_file` points to the original.",
@@ -175,6 +195,9 @@ def build_case_zip(conn, case_id: int) -> bytes:
                    "not searched. Matches inside attachments may be missing.", ""]
     if errors:
         readme += ["## Search errors", ""] + [f"- {e}" for e in errors] + [
+            "", "Results from these runs may be incomplete.", ""]
+    if unfinished:
+        readme += ["## Search runs that did not finish", ""] + [f"- {u}" for u in unfinished] + [
             "", "Results from these runs may be incomplete.", ""]
     if capped:
         readme += ["## Semantic results capped", ""] + [f"- {c}" for c in capped] + [
