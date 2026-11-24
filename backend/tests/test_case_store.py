@@ -92,3 +92,14 @@ def test_list_candidates_order(fresh_db):
     page = cs.list_candidates(fresh_db, cid, None, "maybe", 1, 10)
     assert page["total"] == 1
     assert len(cs.list_candidates(fresh_db, cid, None, None, 2, 2)["items"]) == 2
+
+
+def test_list_candidates_in_range_before_out_of_range(fresh_db):
+    cid = cs.create_case(fresh_db, "c", "i", None, None)
+    old_in = _email(fresh_db, 1, 100.0)
+    new_out = _email(fresh_db, 2, 900.0)
+    _cand(fresh_db, cid, old_in, "relevant")
+    _cand(fresh_db, cid, new_out, "relevant")
+    fresh_db.execute("UPDATE case_candidates SET out_of_range = 1 WHERE email_id = ?", (new_out,))
+    res = cs.list_candidates(fresh_db, cid, None, None, 1, 10)
+    assert [i["email_id"] for i in res["items"]] == [old_in, new_out]

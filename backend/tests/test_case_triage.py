@@ -142,3 +142,21 @@ def test_write_failure_is_per_candidate(seeded, monkeypatch):
     ct.run_triage_sync(cid, db)
     assert sorted(_states(conn)) == ["relevant"] * 4 + ["untriaged"]
     assert ct.TRIAGE_STATUS["done"] == 5 and "1 candidate" in ct.TRIAGE_STATUS["error"]
+
+
+def test_triage_processes_in_range_first(seeded, monkeypatch):
+    db, cid, conn = seeded
+    # newest email is out of range; it must be triaged last despite the newest date
+    conn.execute("UPDATE case_candidates SET out_of_range = 1 WHERE email_id = "
+                 "(SELECT MAX(id) FROM emails)")
+    conn.commit()
+    order = []
+
+    def fake(issue, email):
+        order.append(email["id"])
+        return _res("maybe")
+
+    monkeypatch.setattr(ct, "triage_email", fake)
+    ct.run_triage_sync(cid, db)
+    last = conn.execute("SELECT MAX(id) FROM emails").fetchone()[0]
+    assert order[-1] == last and len(order) == 5

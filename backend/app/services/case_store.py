@@ -6,6 +6,9 @@ from app.services.case_quotes import verify_quote
 REVIEWS = ("unreviewed", "evidence", "not_relevant")
 _TRIAGE_RANK = ("CASE triage WHEN 'relevant' THEN 0 WHEN 'maybe' THEN 1 "
                 "WHEN 'untriaged' THEN 2 ELSE 3 END")
+# Shared by the review queue and the triage job; in-range hits come before out-of-range ones.
+CANDIDATE_ORDER = (f"cc.semantic_only ASC, cc.out_of_range ASC, {_TRIAGE_RANK}, "
+                   "e.date_timestamp IS NULL, e.date_timestamp DESC")
 
 
 def create_case(conn, name, issue, date_from, date_to) -> int:
@@ -113,8 +116,7 @@ def list_candidates(conn, case_id, review, triage, page, page_size) -> dict:
         f"""SELECT cc.*, e.subject, e.sender_name, e.sender_email, e.date_sent, e.date_timestamp
             FROM case_candidates cc JOIN emails e ON e.id = cc.email_id
             WHERE {w}
-            ORDER BY cc.semantic_only ASC, {_TRIAGE_RANK},
-                     e.date_timestamp IS NULL, e.date_timestamp DESC
+            ORDER BY {CANDIDATE_ORDER}
             LIMIT ? OFFSET ?""",
         args + [page_size, (max(page, 1) - 1) * page_size],
     ).fetchall()

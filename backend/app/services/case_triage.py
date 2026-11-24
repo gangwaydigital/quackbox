@@ -6,7 +6,7 @@ from pathlib import Path
 from app.config import DB_PATH
 from app.database import get_connection
 from app.services.case_ai import triage_email
-from app.services.case_store import _TRIAGE_RANK
+from app.services.case_store import CANDIDATE_ORDER
 
 # Mutated in place (never reassigned), like routers/topics._task_status.
 TRIAGE_STATUS = {
@@ -47,8 +47,7 @@ def run_triage_sync(case_id: int, db_path: Path) -> None:
             f"""SELECT e.id, e.subject, e.sender_name, e.sender_email, e.date_sent, e.body_text,
                        e.recipients FROM case_candidates cc JOIN emails e ON e.id = cc.email_id
                 WHERE cc.case_id = ? AND cc.triage = 'untriaged'
-                ORDER BY cc.semantic_only ASC, {_TRIAGE_RANK},
-                         e.date_timestamp IS NULL, e.date_timestamp DESC""",
+                ORDER BY {CANDIDATE_ORDER}""",
             (case_id,),
         ).fetchall()
         TRIAGE_STATUS["total"] = len(rows)
