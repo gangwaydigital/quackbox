@@ -236,13 +236,12 @@ export default function CaseView() {
               <tbody>
                 {runs.map(r => {
                   const n = r.channel_counts || {}
-                  const ver = c.terms.find(t => t.id === r.term_id)?.version
                   return (
                     <tr key={r.id} className="border-t border-gray-100 dark:border-gray-800 align-top">
                       <td className="pr-3 py-1">{r.term_text}</td>
-                      <td className="pr-3">{ver ?? ''}</td>
+                      <td className="pr-3">{r.term_version ?? ''}{!!r.term_retired && ' (retired)'}</td>
                       <td className="pr-3 whitespace-nowrap">{r.started_at}</td>
-                      <td className="pr-3">{r.status === 'ok' ? 'ok' : <span className="text-red-600 dark:text-red-400">error: {r.error}</span>}</td>
+                      <td className="pr-3">{r.status === 'ok' ? 'ok' : r.status === 'running' ? <span className="text-amber-700 dark:text-amber-400">did not finish</span> : <span className="text-red-600 dark:text-red-400">error: {r.error}</span>}</td>
                       <td className="pr-3">{n.keyword ?? ''}</td>
                       <td className="pr-3">{n.recipients ?? ''}</td>
                       <td className="pr-3">{n.attachments ?? ''}</td>

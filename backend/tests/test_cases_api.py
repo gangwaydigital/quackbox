@@ -150,3 +150,11 @@ def test_propose_and_find_more_use_services(client, monkeypatch):
     assert client.post(f"/api/cases/{cid}/propose").json()["terms"] == ["p"]
     client.post(f"/api/cases/{cid}/find-more")
     assert seen["ex"] == ["budget"] and seen["ev"][0]["body_text"].startswith("Please cancel")
+
+
+def test_runs_report_each_runs_own_term_version(client):
+    cid, tid = _candidate(client)
+    new_tid = client.put(f"/api/cases/terms/{tid}", json={"text": "budget meeting"}).json()["id"]
+    client.post(f"/api/cases/{cid}/terms/{new_tid}/run")
+    runs = client.get(f"/api/cases/{cid}/runs").json()  # newest first
+    assert [(r["term_version"], r["term_retired"]) for r in runs] == [(2, 0), (1, 1)]

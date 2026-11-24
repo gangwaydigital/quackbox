@@ -162,7 +162,8 @@ async def list_runs(case_id: int):
     with get_db() as conn:
         _case(conn, case_id)
         rows = conn.execute("""
-            SELECT r.*, t.text AS term_text FROM case_runs r
+            SELECT r.*, t.text AS term_text, t.version AS term_version,
+                   t.retired AS term_retired FROM case_runs r
             LEFT JOIN case_terms t ON t.id = r.term_id
             WHERE r.case_id = ? ORDER BY r.id DESC""", (case_id,)).fetchall()
         return [{**dict(r), "channel_counts": json.loads(r["channel_counts"] or "{}")} for r in rows]
