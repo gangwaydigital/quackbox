@@ -100,3 +100,22 @@ def test_start_triage_false_while_running(seeded):
     db, cid, _ = seeded
     ct.TRIAGE_STATUS["running"] = True
     assert ct.start_triage(cid, db) is False
+
+
+def test_connection_failure_resets_running(tmp_path, monkeypatch):
+    def boom(_):
+        raise OSError("cannot open")
+
+    monkeypatch.setattr(ct, "get_connection", boom)
+    ct.run_triage_sync(1, tmp_path / "x.db")
+    assert ct.TRIAGE_STATUS["running"] is False and "cannot open" in ct.TRIAGE_STATUS["error"]
+
+
+def test_submit_failure_resets_running(monkeypatch):
+    def boom(*a):
+        raise RuntimeError("shutdown")
+
+    monkeypatch.setattr(ct._executor, "submit", boom)
+    with pytest.raises(RuntimeError):
+        ct.start_triage(1)
+    assert ct.TRIAGE_STATUS["running"] is False

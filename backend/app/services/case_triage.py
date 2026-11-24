@@ -26,14 +26,19 @@ def start_triage(case_id: int, db_path: Path = DB_PATH) -> bool:
     # Set before submit so a second call can't slip in before the worker starts.
     TRIAGE_STATUS.update(running=True, case_id=case_id, done=0, total=0,
                          cancelled=False, error=None)
-    _executor.submit(run_triage_sync, case_id, db_path)
+    try:
+        _executor.submit(run_triage_sync, case_id, db_path)
+    except Exception:
+        TRIAGE_STATUS["running"] = False
+        raise
     return True
 
 
 def run_triage_sync(case_id: int, db_path: Path) -> None:
     TRIAGE_STATUS.update(running=True, case_id=case_id, done=0, total=0, error=None)
-    conn = get_connection(db_path)
+    conn = None
     try:
+        conn = get_connection(db_path)
         case = conn.execute("SELECT issue FROM cases WHERE id = ?", (case_id,)).fetchone()
         if case is None:
             TRIAGE_STATUS["error"] = "Case not found"
@@ -68,5 +73,6 @@ def run_triage_sync(case_id: int, db_path: Path) -> None:
     except Exception as e:
         TRIAGE_STATUS["error"] = f"{type(e).__name__}: {e}"[:200]
     finally:
-        conn.close()
+        if conn:
+            conn.close()
         TRIAGE_STATUS["running"] = False
