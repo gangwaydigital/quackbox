@@ -1,7 +1,7 @@
 """Cases API: research workspaces over the email archive."""
 import json
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response
@@ -30,7 +30,7 @@ class PersonIn(BaseModel):
 
 class TermIn(BaseModel):
     text: str
-    source: str = "owner"
+    source: Literal["owner", "model", "find_more"] = "owner"
 
 
 class TermEdit(BaseModel):
@@ -121,7 +121,7 @@ async def add_person(case_id: int, body: PersonIn):
         _case(conn, case_id)
         pid = case_store.add_person(conn, case_id, body.name, body.emails)
         person = {"name": body.name.strip(), "emails": [e.strip().lower() for e in body.emails]}
-        term_ids = [case_store.add_term(conn, case_id, t, "person")
+        term_ids = [case_store.add_term(conn, case_id, t, "owner")
                     for t in person_terms(person) if t.strip()]
         return {"id": pid, "term_ids": term_ids}
 
@@ -143,7 +143,7 @@ def propose(case_id: int):
 
 
 @router.post("/{case_id}/terms/{term_id}/run")
-async def run_one(case_id: int, term_id: int):
+def run_one(case_id: int, term_id: int):
     with get_db() as conn:
         _case(conn, case_id)
         _term(conn, term_id, case_id)
@@ -151,7 +151,7 @@ async def run_one(case_id: int, term_id: int):
 
 
 @router.post("/{case_id}/run-all")
-async def run_all(case_id: int):
+def run_all(case_id: int):
     with get_db() as conn:
         case = _case(conn, case_id)
         return [run_term(conn, case_id, t["id"]) for t in case["terms"]]
@@ -180,18 +180,23 @@ async def list_candidates(case_id: int, review: Optional[str] = None, triage: Op
 async def update_candidate(case_id: int, email_id: int, body: CandidateIn):
     with get_db() as conn:
         _case(conn, case_id)
-        if not conn.execute("SELECT 1 FROM case_candidates WHERE case_id = ? AND email_id = ?",
-                            (case_id, email_id)).fetchone():
+        row = conn.execute("SELECT note FROM case_candidates WHERE case_id = ? AND email_id = ?",
+                           (case_id, email_id)).fetchone()
+        if not row:
             raise HTTPException(404, "Candidate not found")
+        if body.review is not None and body.review not in case_store.REVIEWS:
+            raise HTTPException(400, f"review must be one of {case_store.REVIEWS}")
+        note = body.note if "note" in body.model_fields_set else row["note"]
         try:
-            if body.review is not None:
-                case_store.set_review(conn, case_id, email_id, body.review, body.note)
-            elif body.note is not None:
-                conn.execute("UPDATE case_candidates SET note = ? WHERE case_id = ? AND email_id = ?",
-                             (body.note, case_id, email_id))
-                conn.commit()
+            # Quote first: it is the only check that can fail after review is valid.
             if body.owner_quote is not None:
                 case_store.set_owner_quote(conn, case_id, email_id, body.owner_quote)
+            if body.review is not None:
+                case_store.set_review(conn, case_id, email_id, body.review, note)
+            elif "note" in body.model_fields_set:
+                conn.execute("UPDATE case_candidates SET note = ? WHERE case_id = ? AND email_id = ?",
+                             (note, case_id, email_id))
+                conn.commit()
         except ValueError as e:
             raise HTTPException(
                 400, "That text isn't in the email." if "quote" in str(e) else str(e))
@@ -218,7 +223,7 @@ def find_more_route(case_id: int):
 
 
 @router.get("/{case_id}/export")
-async def export_case(case_id: int):
+def export_case(case_id: int):
     with get_db() as conn:
         _case(conn, case_id)
         data = build_case_zip(conn, case_id)

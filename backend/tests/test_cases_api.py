@@ -45,6 +45,7 @@ def test_create_add_term_run_and_list_candidates(client):
     case = client.get(f"/api/cases/{cid}").json()
     assert case["attachments_indexed"] is False
     assert [t["text"] for t in case["terms"]] == ["budget", "Al", "a@x.com"]
+    assert {t["source"] for t in case["terms"]} == {"owner"}
     runs = client.get(f"/api/cases/{cid}/runs").json()
     assert runs[0]["status"] == "error"  # no embeddings indexed in the test DB
     c = client.get(f"/api/cases/{cid}/candidates").json()
@@ -67,6 +68,25 @@ def test_owner_quote_unverifiable_400(client):
     assert r.status_code == 400 and r.json()["detail"] == "That text isn't in the email."
     assert client.put(f"/api/cases/{cid}/candidates/{eid}",
                       json={"owner_quote": "cancel the budget"}).status_code == 200
+
+
+def test_partial_updates_keep_note_and_are_atomic(client):
+    cid, _ = _candidate(client)
+    eid = client.get(f"/api/cases/{cid}/candidates").json()["items"][0]["email_id"]
+    url = f"/api/cases/{cid}/candidates/{eid}"
+    first = lambda: client.get(f"/api/cases/{cid}/candidates").json()["items"][0]
+    client.put(url, json={"note": "keep me"})
+    client.put(url, json={"review": "evidence"})
+    assert first()["note"] == "keep me" and first()["review"] == "evidence"
+    r = client.put(url, json={"review": "not_relevant", "owner_quote": "nope"})
+    assert r.status_code == 400 and first()["review"] == "evidence"
+    client.put(url, json={"note": None})
+    assert first()["note"] is None
+
+
+def test_bad_term_source_422(client):
+    cid = _mk(client)
+    assert client.post(f"/api/cases/{cid}/terms", json={"text": "x", "source": "bogus"}).status_code == 422
 
 
 def test_triage_conflict_409(client, monkeypatch):
