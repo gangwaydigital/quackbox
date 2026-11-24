@@ -272,7 +272,7 @@ function ThreadEmailTree({ emails, messageCount }) {
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{email.sender_name || email.sender_email}</span>
-                      {email.has_attachments && <Paperclip className="w-3 h-3 text-gray-400" />}
+                      {!!email.has_attachments && <Paperclip className="w-3 h-3 text-gray-400" />}
                     </div>
                     <span className="text-xs text-gray-500">{formatDate(email.date_sent)}</span>
                   </div>
@@ -461,7 +461,7 @@ export function ThreadView() {
                 >
                   <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${exp ? '' : '-rotate-90'}`} />
                   <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{email.sender_name || email.sender_email}</span>
-                  {email.has_attachments && <Paperclip className="w-3 h-3 text-gray-400" />}
+                  {!!email.has_attachments && <Paperclip className="w-3 h-3 text-gray-400" />}
                   <span className="flex-1" />
                   <span className="text-xs text-gray-400">{email.date_sent ? formatDate(email.date_sent) : ''}</span>
                   <Link to={`/email/${email.id}`} onClick={(e) => e.stopPropagation()} className="text-xs text-blue-500 hover:text-blue-600 ml-2">Open</Link>

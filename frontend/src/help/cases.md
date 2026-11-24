@@ -102,14 +102,14 @@ Triage only orders the queue. Relevant emails move up, then maybe, then untriage
 
 How it works in practice:
 
-- Click **Start triage**. It shows progress as `done/total` and handles one email after another. Expect roughly a few seconds per email, so 500 emails take a while.
+- Click **Start triage**. It shows progress as `done/total` and handles one email after another. Speed depends on your model and machine. On a fast Mac with a local model it handled about 40 emails a minute, so 500 emails take around 12 minutes.
 - **Cancel** stops after the current email. What was finished keeps its label.
 - Only one triage runs at a time, across all cases.
 - **Start triage** only picks up untriaged emails, so run it again after adding more terms. Emails that failed with an error are tried again too.
 
 ## Review queue
 
-![Review queue with an email expanded](/help/case-queue.png)
+![Review queue filtered to Relevant](/help/case-queue.png)
 
 The queue is the list of all candidates. The title shows how many match the filters.
 
