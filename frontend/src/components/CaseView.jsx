@@ -42,6 +42,8 @@ export default function CaseView() {
   const [page, setPage] = useState(1)
   const [busy, setBusy] = useState({})   // key -> true while a slow call runs
   const [person, setPerson] = useState({ name: '', emails: '' })
+  const [personQ, setPersonQ] = useState('')          // text being typed in Name or Emails
+  const [contactHits, setContactHits] = useState([])          // matching contacts from the archive
   const [newTerm, setNewTerm] = useState('')
   const [editing, setEditing] = useState(null) // { id, text }
   const [proposals, setProposals] = useState(null)   // { terms, error }
@@ -92,8 +94,27 @@ export default function CaseView() {
     const emails = person.emails.split(/[,\s]+/).filter(Boolean)
     await api.addCasePerson(id, person.name.trim(), emails)
     setPerson({ name: '', emails: '' })
+    setPersonQ('')
     loadCase()
   })
+
+  useEffect(() => {
+    if (personQ.trim().length < 2) { setContactHits([]); return }
+    const t = setTimeout(() => {
+      api.getContacts({ search: personQ.trim(), page_size: 8 }).then(r => setContactHits(r.items || [])).catch(() => setContactHits([]))
+    }, 250)
+    return () => clearTimeout(t)
+  }, [personQ])
+
+  const pickContact = (s) => {
+    setPerson(p => {
+      const kept = p.emails.split(/[,\s]+/).filter(x => x && x !== personQ.trim())
+      // A name typed only to search gets replaced by the contact's full name.
+      const name = !p.name.trim() || p.name === personQ ? (s.display_name || p.name) : p.name
+      return { name, emails: [...new Set([...kept, s.sender_email])].join(', ') }
+    })
+    setPersonQ('')
+  }
   const addTerm = run('term', async (e) => {
     e.preventDefault()
     await api.addCaseTerm(id, newTerm)
@@ -175,10 +196,21 @@ export default function CaseView() {
           {c.people.map(p => <li key={p.id}><b>{p.name}</b> <span className="text-gray-500">{p.emails.join(', ')}</span></li>)}
         </ul>
         <form onSubmit={addPerson} className="flex gap-2 flex-wrap">
-          <input className={input} placeholder="Name" value={person.name} onChange={e => setPerson(p => ({ ...p, name: e.target.value }))} />
-          <input className={`${input} flex-1 min-w-[12rem]`} placeholder="Emails (comma separated)" value={person.emails} onChange={e => setPerson(p => ({ ...p, emails: e.target.value }))} />
+          <input className={input} placeholder="Name" value={person.name} onChange={e => { const v = e.target.value; setPerson(p => ({ ...p, name: v })); setPersonQ(v) }} />
+          <input className={`${input} flex-1 min-w-[12rem]`} placeholder="Emails (comma separated)" value={person.emails} onChange={e => { const v = e.target.value; setPerson(p => ({ ...p, emails: v })); setPersonQ(v.split(/[,\s]+/).pop()) }} />
           <button className={btn} disabled={busy.person || !person.name.trim()}><UserPlus className="w-3.5 h-3.5" />Add</button>
         </form>
+        {contactHits.length > 0 && (
+          <ul className="border border-gray-200 dark:border-gray-800 rounded-lg divide-y divide-gray-100 dark:divide-gray-800 text-sm">
+            {contactHits.map(s => (
+              <li key={s.sender_email}>
+                <button type="button" onClick={() => pickContact(s)} className="w-full text-left px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">
+                  {s.display_name || s.sender_email} <span className="text-xs text-gray-500">{s.sender_email} · {s.total_emails} emails</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       {/* Terms */}
